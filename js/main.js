@@ -671,7 +671,7 @@ function playEmotionAudio(
     if (!src) {
 
         console.warn(
-            'Áudio não encontrado para a emoção:',
+            'Áudio não encontrado para:',
             emotion
         );
 
@@ -680,8 +680,8 @@ function playEmotionAudio(
 
 
     // --------------------------------------------------------
-    // Se já está tocando exatamente esta emoção,
-    // não reinicia a música.
+    // A mesma emoção já está tocando.
+    // Não faz nada.
     // --------------------------------------------------------
 
     if (
@@ -694,10 +694,9 @@ function playEmotionAudio(
 
 
     console.log(
-        'Trocando áudio:',
-        currentEmotion,
-        '→',
-        emotion
+        'ÁUDIO →',
+        emotion,
+        src
     );
 
 
@@ -705,192 +704,259 @@ function playEmotionAudio(
         emotion;
 
 
-    if (currentAudio) {
+    // --------------------------------------------------------
+    // CRIA A NOVA MÚSICA IMEDIATAMENTE
+    //
+    // Isso é importante para o navegador não considerar
+    // o play() como uma reprodução atrasada.
+    // --------------------------------------------------------
 
-        const oldAudio =
-            currentAudio;
-
-
-        currentAudio =
-            null;
-
-
-        fadeOut(
-            oldAudio,
-            () => {
-
-                startAudio(src);
-            }
-        );
-
-    } else {
-
-        startAudio(src);
-    }
-}
-
-
-function startAudio(src) {
-
-    const audio =
+    const newAudio =
         new Audio(src);
 
 
-    audio.loop =
+    newAudio.loop =
         true;
 
 
-    audio.volume =
+    newAudio.volume =
         0;
 
 
-    audio.play().catch(
-        error => {
+    // --------------------------------------------------------
+    // Guarda referência da música anterior
+    // --------------------------------------------------------
 
-            console.warn(
-                'Áudio bloqueado pelo navegador:',
-                error
-            );
-        }
-    );
-
-
-    fadeIn(
-        audio
-    );
+    const oldAudio =
+        currentAudio;
 
 
     currentAudio =
-        audio;
-}
+        newAudio;
 
 
-function fadeOut(
-    audio,
-    onDone
-) {
+    // --------------------------------------------------------
+    // Tenta iniciar IMEDIATAMENTE
+    // --------------------------------------------------------
 
-    clearInterval(
-        fadeInterval
-    );
+    const playPromise =
+        newAudio.play();
 
 
-    if (!audio) {
+    if (
+        playPromise &&
+        typeof playPromise.catch === 'function'
+    ) {
 
-        if (onDone) {
-            onDone();
-        }
+        playPromise.catch(
+            error => {
 
-        return;
+                console.warn(
+                    'Áudio bloqueado pelo navegador:',
+                    error
+                );
+            }
+        );
     }
 
 
-    const step =
-        Math.max(
-            audio.volume /
-            (FADE_DURATION / 50),
-            0.01
+    // --------------------------------------------------------
+    // FADE IN da nova música
+    // --------------------------------------------------------
+
+    fadeInAudio(
+        newAudio
+    );
+
+
+    // --------------------------------------------------------
+    // FADE OUT da música anterior
+    // --------------------------------------------------------
+
+    if (oldAudio) {
+
+        fadeOutAudio(
+            oldAudio
         );
-
-
-    fadeInterval =
-        setInterval(
-            () => {
-
-                audio.volume =
-                    Math.max(
-                        0,
-                        audio.volume - step
-                    );
-
-
-                if (
-                    audio.volume <= 0
-                ) {
-
-                    clearInterval(
-                        fadeInterval
-                    );
-
-
-                    audio.pause();
-
-
-                    audio.src =
-                        '';
-
-
-                    if (onDone) {
-                        onDone();
-                    }
-                }
-
-            },
-            50
-        );
+    }
 }
 
 
-function fadeIn(
+// ============================================================
+// FADE IN — ÁUDIO INDIVIDUAL
+// ============================================================
+
+function fadeInAudio(
     audio
 ) {
 
-    clearInterval(
-        fadeInterval
-    );
+    if (!audio) {
+        return;
+    }
 
 
     const target =
         0.7;
 
 
-    const step =
-        target /
-        (FADE_DURATION / 50);
+    const duration =
+        FADE_DURATION;
 
 
-    fadeInterval =
-        setInterval(
-            () => {
-
-                audio.volume =
-                    Math.min(
-                        target,
-                        audio.volume + step
-                    );
+    const startTime =
+        performance.now();
 
 
-                if (
-                    audio.volume >= target
-                ) {
+    function step(
+        now
+    ) {
 
-                    clearInterval(
-                        fadeInterval
-                    );
-                }
+        if (!audio) {
+            return;
+        }
 
-            },
-            50
-        );
+
+        const elapsed =
+            now -
+            startTime;
+
+
+        const progress =
+            Math.min(
+                elapsed / duration,
+                1
+            );
+
+
+        audio.volume =
+            target *
+            progress;
+
+
+        if (
+            progress < 1
+        ) {
+
+            requestAnimationFrame(
+                step
+            );
+        }
+    }
+
+
+    requestAnimationFrame(
+        step
+    );
 }
 
 
+// ============================================================
+// FADE OUT — ÁUDIO INDIVIDUAL
+// ============================================================
+
+function fadeOutAudio(
+    audio
+) {
+
+    if (!audio) {
+        return;
+    }
+
+
+    const startVolume =
+        audio.volume;
+
+
+    const duration =
+        FADE_DURATION;
+
+
+    const startTime =
+        performance.now();
+
+
+    function step(
+        now
+    ) {
+
+        if (!audio) {
+            return;
+        }
+
+
+        const elapsed =
+            now -
+            startTime;
+
+
+        const progress =
+            Math.min(
+                elapsed / duration,
+                1
+            );
+
+
+        audio.volume =
+            Math.max(
+                0,
+                startVolume *
+                (1 - progress)
+            );
+
+
+        if (
+            progress < 1
+        ) {
+
+            requestAnimationFrame(
+                step
+            );
+
+        } else {
+
+            audio.pause();
+
+            audio.currentTime =
+                0;
+
+            audio.src =
+                '';
+        }
+    }
+
+
+    requestAnimationFrame(
+        step
+    );
+}
+
+
+// ============================================================
+// PARA ÁUDIO
+// ============================================================
+
 function stopAudio() {
 
-    if (currentAudio) {
+    const audio =
+        currentAudio;
 
-        fadeOut(
-            currentAudio,
-            () => {
-                currentAudio = null;
-            }
-        );
-    }
+
+    currentAudio =
+        null;
 
 
     currentEmotion =
         null;
+
+
+    if (audio) {
+
+        fadeOutAudio(
+            audio
+        );
+    }
 }
+
 
 
 // ============================================================
