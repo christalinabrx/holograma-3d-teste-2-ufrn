@@ -1,18 +1,48 @@
-
 const CONFIG = {
-    MODELS: 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'
+    MODELS:
+        'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'
 };
+
+
+// ============================================================
+// ÁUDIO
+// ============================================================
 
 const AUDIO_MAP = {
-    happy:     'assets/audio/Holograma3D_Feliz.mp3',
-    sad:       'assets/audio/Holograma3D_Triste.mp3',
-    angry:     'assets/audio/Holograma3D_Raiva.mp3',
-    disgusted: 'assets/audio/Holograma3D_Nojo.mp3',
-    surprised: 'assets/audio/Holograma3D_Surpresa.mp3',
-    fearful:   'assets/audio/Holograma3D_Triste.mp3',
-    neutral:   'assets/audio/Holograma3D_Neutro.mp3',
-    carousel:  'assets/audio/Holograma3D_Carrossel.mp3'
+
+    happy:
+        'assets/audio/Holograma3D_Feliz.mp3',
+
+    sad:
+        'assets/audio/Holograma3D_Triste.mp3',
+
+    angry:
+        'assets/audio/Holograma3D_Raiva.mp3',
+
+    disgusted:
+        'assets/audio/Holograma3D_Nojo.mp3',
+
+    surprised:
+        'assets/audio/Holograma3D_Surpresa.mp3',
+
+    fearful:
+        'assets/audio/Holograma3D_Triste.mp3',
+
+    neutral:
+        'assets/audio/Holograma3D_Neutro.mp3',
+
+    /*
+     * Mantido no mapa por compatibilidade,
+     * mas NÃO é usado como trilha principal
+     * do carrossel.
+     *
+     * No carrossel, o áudio é determinado
+     * pela emoção que está em videoTop.
+     */
+    carousel:
+        'assets/audio/Holograma3D_Carrossel.mp3'
 };
+
 
 const FADE_DURATION = 1000;
 
@@ -23,6 +53,11 @@ const FACE_IDS = [
     'videoBottom'
 ];
 
+
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+
 let hCtrl = null;
 let eCtrl = null;
 
@@ -32,7 +67,68 @@ let landmarksActive = false;
 let currentAudio = null;
 let currentEmotion = null;
 
-let fadeInterval = null;
+/*
+ * Geração do sistema de áudio.
+ *
+ * Cada troca de áudio invalida os fades anteriores.
+ * Isso impede que vários requestAnimationFrame()
+ * antigos continuem alterando o volume do áudio atual.
+ */
+let audioGeneration = 0;
+
+let systemStarted = false;
+let startInProgress = false;
+
+let cameraStream = null;
+let hiddenVideo = null;
+
+
+// ============================================================
+// UTILITÁRIOS DE ÁUDIO
+// ============================================================
+
+function clampVolume(value) {
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return 0;
+    }
+
+    return Math.max(
+        0,
+        Math.min(1, number)
+    );
+}
+
+
+function setAudioVolume(audio, value) {
+
+    if (!audio) {
+        return;
+    }
+
+    try {
+
+        audio.volume =
+            clampVolume(value);
+
+    } catch (error) {
+
+        console.warn(
+            'Não foi possível ajustar volume:',
+            error
+        );
+    }
+}
+
+
+function invalidateAudioFades() {
+
+    audioGeneration++;
+
+    return audioGeneration;
+}
 
 
 // ============================================================
@@ -44,54 +140,84 @@ async function init() {
     try {
 
         const progress =
-            document.getElementById('loadingProgress');
-
-        console.log('Carregando modelos face-api.js...');
+            document.getElementById(
+                'loadingProgress'
+            );
 
 
         // ====================================================
         // TINY FACE DETECTOR
         // ====================================================
 
-        await faceapi.nets.tinyFaceDetector.loadFromUri(
-            CONFIG.MODELS
+        console.log(
+            'Carregando TinyFaceDetector...'
         );
 
+        await faceapi.nets
+            .tinyFaceDetector
+            .loadFromUri(
+                CONFIG.MODELS
+            );
+
+
         if (progress) {
-            progress.style.width = '33%';
+            progress.style.width =
+                '33%';
         }
 
-        console.log('TinyFaceDetector carregado.');
+        console.log(
+            'TinyFaceDetector carregado.'
+        );
 
 
         // ====================================================
         // EXPRESSÕES
         // ====================================================
 
-        await faceapi.nets.faceExpressionNet.loadFromUri(
-            CONFIG.MODELS
+        console.log(
+            'Carregando FaceExpressionNet...'
         );
 
+        await faceapi.nets
+            .faceExpressionNet
+            .loadFromUri(
+                CONFIG.MODELS
+            );
+
+
         if (progress) {
-            progress.style.width = '66%';
+            progress.style.width =
+                '66%';
         }
 
-        console.log('FaceExpressionNet carregado.');
+        console.log(
+            'FaceExpressionNet carregado.'
+        );
 
 
         // ====================================================
         // LANDMARKS
         // ====================================================
 
-        await faceapi.nets.faceLandmark68TinyNet.loadFromUri(
-            CONFIG.MODELS
+        console.log(
+            'Carregando FaceLandmark68TinyNet...'
         );
 
+        await faceapi.nets
+            .faceLandmark68TinyNet
+            .loadFromUri(
+                CONFIG.MODELS
+            );
+
+
         if (progress) {
-            progress.style.width = '100%';
+            progress.style.width =
+                '100%';
         }
 
-        console.log('FaceLandmark68TinyNet carregado.');
+        console.log(
+            'FaceLandmark68TinyNet carregado.'
+        );
 
 
         // ====================================================
@@ -99,37 +225,61 @@ async function init() {
         // ====================================================
 
         const devices =
-            await navigator.mediaDevices.enumerateDevices();
+            await navigator
+                .mediaDevices
+                .enumerateDevices();
+
 
         const videos =
             devices.filter(
-                device => device.kind === 'videoinput'
+                device =>
+                    device.kind ===
+                    'videoinput'
             );
 
+
         const select =
-            document.getElementById('cameraSelect');
+            document.getElementById(
+                'cameraSelect'
+            );
 
 
-        select.innerHTML =
-            videos.map(
-                device =>
-                    `<option value="${device.deviceId}">
-                        ${device.label || 'Câmera'}
-                    </option>`
-            ).join('');
+        if (select) {
+
+            select.innerHTML =
+                videos.map(
+                    device =>
+                        `<option value="${device.deviceId}">
+                            ${device.label || 'Câmera'}
+                        </option>`
+                ).join('');
 
 
-        select.disabled = false;
+            select.disabled = false;
+        }
 
 
-        document.getElementById(
-            'startBtn'
-        ).disabled = false;
+        const startBtn =
+            document.getElementById(
+                'startBtn'
+            );
 
 
-        document.getElementById(
-            'loadingScreen'
-        ).style.display = 'none';
+        if (startBtn) {
+            startBtn.disabled = false;
+        }
+
+
+        const loadingScreen =
+            document.getElementById(
+                'loadingScreen'
+            );
+
+
+        if (loadingScreen) {
+            loadingScreen.style.display =
+                'none';
+        }
 
 
         updateStatus(
@@ -165,41 +315,104 @@ async function init() {
 
 async function start() {
 
+    /*
+     * Evita clicar em START várias vezes.
+     */
+    if (startInProgress) {
+
+        console.log(
+            'Inicialização já está em andamento.'
+        );
+
+        return;
+    }
+
+
+    /*
+     * Se o sistema já está funcionando,
+     * não cria outra câmera nem tenta recriar
+     * os canvases.
+     */
+    if (
+        systemStarted &&
+        eCtrl &&
+        hCtrl
+    ) {
+
+        console.log(
+            'Holograma já está em execução. START ignorado.'
+        );
+
+        updateStatus(
+            'Holograma Online',
+            'success'
+        );
+
+        return;
+    }
+
+
+    startInProgress = true;
+
+
     try {
 
-        console.log('Iniciando câmera...');
+        // ====================================================
+        // BOTÃO
+        // ====================================================
+
+        const startBtn =
+            document.getElementById(
+                'startBtn'
+            );
+
+
+        if (startBtn) {
+            startBtn.disabled = true;
+        }
+
+
+        // ====================================================
+        // CÂMERA SELECIONADA
+        // ====================================================
+
+        const select =
+            document.getElementById(
+                'cameraSelect'
+            );
 
 
         const id =
-            document
-                .getElementById('cameraSelect')
-                .value;
+            select
+                ? select.value
+                : '';
+
+
+        console.log(
+            'Iniciando câmera...'
+        );
 
 
         // ====================================================
-        // CÂMERA
+        // GET USER MEDIA
         // ====================================================
 
-        const stream =
-            await navigator.mediaDevices.getUserMedia({
+        cameraStream =
+            await navigator
+                .mediaDevices
+                .getUserMedia({
 
-                video: {
-                    deviceId: id
-                        ? { exact: id }
-                        : undefined,
+                    video: {
 
-                    width: {
-                        ideal: 640
-                    },
-
-                    height: {
-                        ideal: 480
+                        deviceId:
+                            id
+                                ? {
+                                    exact: id
+                                }
+                                : undefined
                     }
-                },
 
-                audio: false
-
-            });
+                });
 
 
         console.log(
@@ -208,15 +421,17 @@ async function start() {
 
 
         // ====================================================
-        // VÍDEO ÚNICO PARA TODO O SISTEMA
+        // VÍDEO OCULTO ÚNICO
         // ====================================================
 
-        const hiddenVideo =
-            document.createElement('video');
+        hiddenVideo =
+            document.createElement(
+                'video'
+            );
 
 
         hiddenVideo.srcObject =
-            stream;
+            cameraStream;
 
 
         hiddenVideo.muted =
@@ -231,30 +446,8 @@ async function start() {
             true;
 
 
-        hiddenVideo.setAttribute(
-            'playsinline',
-            ''
-        );
-
-
-        hiddenVideo.style.position =
-            'fixed';
-
-
-        hiddenVideo.style.left =
-            '-9999px';
-
-
-        hiddenVideo.style.top =
-            '-9999px';
-
-
-        hiddenVideo.style.width =
-            '1px';
-
-
-        hiddenVideo.style.height =
-            '1px';
+        hiddenVideo.style.display =
+            'none';
 
 
         document.body.appendChild(
@@ -266,16 +459,54 @@ async function start() {
 
 
         // ====================================================
-        // ESPERA O VÍDEO TER DIMENSÕES
+        // ESPERA DIMENSÕES DA CÂMERA
         // ====================================================
 
-        await waitForVideoReady(
-            hiddenVideo
+        await new Promise(
+            resolve => {
+
+                if (
+                    hiddenVideo.videoWidth > 0 &&
+                    hiddenVideo.videoHeight > 0
+                ) {
+
+                    resolve();
+
+                    return;
+                }
+
+
+                const check =
+                    () => {
+
+                        if (
+                            hiddenVideo.videoWidth > 0 &&
+                            hiddenVideo.videoHeight > 0
+                        ) {
+
+                            resolve();
+
+                            return;
+                        }
+
+
+                        requestAnimationFrame(
+                            check
+                        );
+                    };
+
+
+                check();
+            }
         );
 
 
         console.log(
-            `Vídeo da câmera pronto: ${hiddenVideo.videoWidth}x${hiddenVideo.videoHeight}`
+            `Vídeo da câmera pronto: ${
+                hiddenVideo.videoWidth
+            }x${
+                hiddenVideo.videoHeight
+            }`
         );
 
 
@@ -285,16 +516,18 @@ async function start() {
 
         const {
             EmotionController
-        } = await import(
-            './detec_emotion.js'
-        );
+        } =
+            await import(
+                './detec_emotion.js'
+            );
 
 
         const {
             HologramController
-        } = await import(
-            './control_holo.js'
-        );
+        } =
+            await import(
+                './control_holo.js'
+            );
 
 
         // ====================================================
@@ -322,73 +555,101 @@ async function start() {
 
 
         // ====================================================
-        // SUBSTITUI OS VÍDEOS POR CANVAS
+        // CONFIGURA OS QUATRO CANVASES
         // ====================================================
 
         FACE_IDS.forEach(
             faceId => {
 
-                const videoEl =
+                /*
+                 * PRIMEIRO procura o canvas.
+                 *
+                 * Isso é importante porque depois da primeira
+                 * inicialização os elementos videoTop etc.
+                 * já não existem mais.
+                 */
+                let canvas =
                     document.getElementById(
-                        faceId
+                        faceId +
+                        '_canvas'
                     );
 
 
-                if (!videoEl) {
+                /*
+                 * Se o canvas ainda não existe,
+                 * procura o elemento original.
+                 */
+                if (!canvas) {
 
-                    console.warn(
-                        `Elemento ${faceId} não encontrado.`
-                    );
+                    const videoEl =
+                        document.getElementById(
+                            faceId
+                        );
 
-                    return;
+
+                    if (!videoEl) {
+
+                        console.warn(
+                            `Elemento ${faceId} não encontrado.`
+                        );
+
+                        return;
+                    }
+
+
+                    canvas =
+                        document.createElement(
+                            'canvas'
+                        );
+
+
+                    canvas.width =
+                        300;
+
+
+                    canvas.height =
+                        300;
+
+
+                    canvas.id =
+                        faceId +
+                        '_canvas';
+
+
+                    /*
+                     * Preserva a aparência original
+                     * do elemento.
+                     */
+                    canvas.style.cssText =
+                        videoEl.style.cssText;
+
+
+                    canvas.className =
+                        videoEl.className;
+
+
+                    videoEl.parentNode
+                        .replaceChild(
+                            canvas,
+                            videoEl
+                        );
                 }
 
 
-                const canvas =
-                    document.createElement(
-                        'canvas'
-                    );
-
-
-                canvas.width = 300;
-                canvas.height = 300;
-
-
-                canvas.id =
-                    faceId + '_canvas';
-
-
-                // Mantém aparência/posicionamento original
-                canvas.style.cssText =
-                    videoEl.style.cssText;
-
-
-                canvas.className =
-                    videoEl.className;
-
-
-                videoEl.parentNode.replaceChild(
-                    canvas,
-                    videoEl
-                );
-
-
+                /*
+                 * Registra o canvas no EmotionController.
+                 */
                 eCtrl.registerCanvas(
                     faceId,
                     canvas,
                     hiddenVideo
-                );
-
-
-                console.log(
-                    `Canvas registrado: ${faceId}`
                 );
             }
         );
 
 
         // ====================================================
-        // CARROSSEL
+        // CALLBACK DO CARROSSEL
         // ====================================================
 
         hCtrl._onCarouselChange =
@@ -399,9 +660,10 @@ async function start() {
                 direction
             ) => {
 
-                // ------------------------------------------------
-                // ATUALIZA O WIDGET INFINITO
-                // ------------------------------------------------
+
+                // ============================================
+                // WIDGET INFINITO
+                // ============================================
 
                 updateInfinityWidget(
                     faceEmotions,
@@ -411,28 +673,35 @@ async function start() {
                 );
 
 
-                // ------------------------------------------------
-                // ATUALIZA OS RÓTULOS
-                // ------------------------------------------------
+                // ============================================
+                // LABELS
+                // ============================================
 
                 updateCarouselLabels(
                     faceEmotions
                 );
 
 
-                // ------------------------------------------------
+                // ============================================
                 // ÁUDIO DO CARROSSEL
-                //
-                // O vídeo que está em videoTop determina
-                // qual música deve tocar.
-                // ------------------------------------------------
+                // ============================================
 
-                if (carouselActive) {
+                /*
+                 * ESTA É A REGRA IMPORTANTE:
+                 *
+                 * O áudio do carrossel é determinado
+                 * pela expressão que está atualmente
+                 * no holograma superior (videoTop).
+                 */
+                if (
+                    carouselActive
+                ) {
 
                     const topFace =
                         faceEmotions.find(
                             item =>
-                                item.face === 'videoTop'
+                                item.face ===
+                                'videoTop'
                         );
 
 
@@ -456,7 +725,7 @@ async function start() {
 
 
         // ====================================================
-        // EMOÇÕES
+        // CALLBACK DE EMOÇÃO
         // ====================================================
 
         eCtrl.onEmotionChange =
@@ -465,6 +734,7 @@ async function start() {
                 confidence
             ) => {
 
+
                 console.log(
                     'MAIN recebeu emoção:',
                     emotion,
@@ -472,21 +742,22 @@ async function start() {
                 );
 
 
-                // =================================================
-                // NO CARROSSEL:
-                //
-                // A detecção continua rodando, mas a expressão
-                // detectada pela câmera NÃO altera o holograma
-                // nem o áudio.
-                //
-                // O áudio é controlado exclusivamente pelo
-                // vídeo que está atualmente no topo.
-                // =================================================
+                /*
+                 * No carrossel, a IA continua funcionando,
+                 * mas NÃO pode substituir a expressão
+                 * controlada pelo carrossel.
+                 */
+                if (
+                    carouselActive
+                ) {
 
-                if (carouselActive) {
                     return;
                 }
 
+
+                // ============================================
+                // NOME DA EXPRESSÃO
+                // ============================================
 
                 const expressionName =
                     document.getElementById(
@@ -501,6 +772,10 @@ async function start() {
                 }
 
 
+                // ============================================
+                // CONFIANÇA
+                // ============================================
+
                 const confidenceFill =
                     document.getElementById(
                         'confidenceFill'
@@ -509,12 +784,27 @@ async function start() {
 
                 if (confidenceFill) {
 
+                    const safeConfidence =
+                        Math.max(
+                            0,
+                            Math.min(
+                                1,
+                                Number(confidence) || 0
+                            )
+                        );
+
+
                     confidenceFill.style.width =
                         (
-                            confidence * 100
+                            safeConfidence *
+                            100
                         ) + '%';
                 }
 
+
+                // ============================================
+                // FILTRO
+                // ============================================
 
                 if (hCtrl) {
 
@@ -524,6 +814,10 @@ async function start() {
                     );
                 }
 
+
+                // ============================================
+                // ÁUDIO
+                // ============================================
 
                 playEmotionAudio(
                     emotion
@@ -536,46 +830,62 @@ async function start() {
         // ====================================================
 
         console.log(
-            '================================================'
-        );
-
-        console.log(
             'Iniciando detecção...'
         );
+
 
         console.log(
             'DEBUG eCtrl =',
             eCtrl
         );
 
+
         console.log(
             'DEBUG startDetection =',
             eCtrl?.startDetection
         );
 
-        console.log(
-            '================================================'
-        );
+
+        /*
+         * Marca como iniciado ANTES do startDetection.
+         *
+         * O startDetection inicia os loops internos e pode
+         * retornar depois. Isso impede que um segundo clique
+         * abra outra câmera nesse intervalo.
+         */
+        systemStarted = true;
 
 
         await eCtrl.startDetection(
-            stream,
+            cameraStream,
             hiddenVideo
         );
 
 
         // ====================================================
-        // ATIVA CONTROLES
+        // UI
         // ====================================================
 
-        document.getElementById(
-            'carouselToggleBtn'
-        ).disabled = false;
+        const carouselBtn =
+            document.getElementById(
+                'carouselToggleBtn'
+            );
 
 
-        document.getElementById(
-            'landmarksToggleBtn'
-        ).disabled = false;
+        if (carouselBtn) {
+            carouselBtn.disabled = false;
+        }
+
+
+        const landmarksBtn =
+            document.getElementById(
+                'landmarksToggleBtn'
+            );
+
+
+        if (landmarksBtn) {
+            landmarksBtn.disabled = false;
+        }
 
 
         updateStatus(
@@ -597,69 +907,96 @@ async function start() {
         );
 
 
+        systemStarted = false;
+
+
+        // ====================================================
+        // LIMPA CÂMERA EM CASO DE ERRO
+        // ====================================================
+
+        if (cameraStream) {
+
+            cameraStream
+                .getTracks()
+                .forEach(
+                    track =>
+                        track.stop()
+                );
+
+            cameraStream = null;
+        }
+
+
+        if (hiddenVideo) {
+
+            try {
+                hiddenVideo.pause();
+            } catch (_) {}
+
+
+            hiddenVideo.srcObject =
+                null;
+
+
+            if (
+                hiddenVideo.parentNode
+            ) {
+
+                hiddenVideo.parentNode
+                    .removeChild(
+                        hiddenVideo
+                    );
+            }
+
+
+            hiddenVideo = null;
+        }
+
+
+        hCtrl = null;
+        eCtrl = null;
+
+
         updateStatus(
             'Erro ao iniciar',
             'danger'
         );
+
+
+        const startBtn =
+            document.getElementById(
+                'startBtn'
+            );
+
+
+        if (startBtn) {
+            startBtn.disabled = false;
+        }
+
+
+    } finally {
+
+        startInProgress = false;
     }
 }
 
 
 // ============================================================
-// ESPERA VÍDEO
-// ============================================================
-
-function waitForVideoReady(video) {
-
-    return new Promise(
-        resolve => {
-
-            if (
-                video.readyState >= 2 &&
-                video.videoWidth > 0
-            ) {
-
-                resolve();
-                return;
-            }
-
-
-            const check =
-                () => {
-
-                    if (
-                        video.readyState >= 2 &&
-                        video.videoWidth > 0 &&
-                        video.videoHeight > 0
-                    ) {
-
-                        resolve();
-
-                        return;
-                    }
-
-
-                    requestAnimationFrame(
-                        check
-                    );
-                };
-
-
-            check();
-        }
-    );
-}
-
-
-// ============================================================
-// ÁUDIO
+// SISTEMA DE ÁUDIO
 // ============================================================
 
 function playEmotionAudio(
     emotion
 ) {
 
-    if (!emotion) {
+    /*
+     * Não reinicia o mesmo áudio.
+     */
+    if (
+        emotion === currentEmotion &&
+        currentAudio
+    ) {
+
         return;
     }
 
@@ -679,38 +1016,24 @@ function playEmotionAudio(
     }
 
 
-    // --------------------------------------------------------
-    // A mesma emoção já está tocando.
-    // Não faz nada.
-    // --------------------------------------------------------
-
-    if (
-        emotion === currentEmotion &&
-        currentAudio
-    ) {
-
-        return;
-    }
-
-
-    console.log(
-        'ÁUDIO →',
-        emotion,
-        src
-    );
-
-
     currentEmotion =
         emotion;
 
 
-    // --------------------------------------------------------
-    // CRIA A NOVA MÚSICA IMEDIATAMENTE
-    //
-    // Isso é importante para o navegador não considerar
-    // o play() como uma reprodução atrasada.
-    // --------------------------------------------------------
+    /*
+     * Cancela todos os fades anteriores.
+     */
+    const generation =
+        invalidateAudioFades();
 
+
+    /*
+     * Cria imediatamente o novo áudio.
+     *
+     * O áudio antigo e o novo podem coexistir
+     * durante o fade, produzindo uma transição
+     * muito mais suave.
+     */
     const newAudio =
         new Audio(src);
 
@@ -719,14 +1042,15 @@ function playEmotionAudio(
         true;
 
 
-    newAudio.volume =
-        0;
+    setAudioVolume(
+        newAudio,
+        0
+    );
 
 
-    // --------------------------------------------------------
-    // Guarda referência da música anterior
-    // --------------------------------------------------------
-
+    /*
+     * Guarda o áudio atual imediatamente.
+     */
     const oldAudio =
         currentAudio;
 
@@ -735,59 +1059,51 @@ function playEmotionAudio(
         newAudio;
 
 
-    // --------------------------------------------------------
-    // Tenta iniciar IMEDIATAMENTE
-    // --------------------------------------------------------
-
-    const playPromise =
-        newAudio.play();
-
-
-    if (
-        playPromise &&
-        typeof playPromise.catch === 'function'
-    ) {
-
-        playPromise.catch(
+    /*
+     * Inicia o novo áudio.
+     */
+    newAudio
+        .play()
+        .catch(
             error => {
 
                 console.warn(
-                    'Áudio bloqueado pelo navegador:',
+                    'Não foi possível iniciar áudio:',
                     error
                 );
             }
         );
-    }
 
 
-    // --------------------------------------------------------
-    // FADE IN da nova música
-    // --------------------------------------------------------
-
+    /*
+     * Fade-in do novo áudio.
+     */
     fadeInAudio(
-        newAudio
+        newAudio,
+        generation
     );
 
 
-    // --------------------------------------------------------
-    // FADE OUT da música anterior
-    // --------------------------------------------------------
-
+    /*
+     * Fade-out do áudio anterior.
+     */
     if (oldAudio) {
 
         fadeOutAudio(
-            oldAudio
+            oldAudio,
+            generation
         );
     }
 }
 
 
 // ============================================================
-// FADE IN — ÁUDIO INDIVIDUAL
+// FADE IN
 // ============================================================
 
 function fadeInAudio(
-    audio
+    audio,
+    generation
 ) {
 
     if (!audio) {
@@ -799,19 +1115,33 @@ function fadeInAudio(
         0.7;
 
 
-    const duration =
-        FADE_DURATION;
-
-
     const startTime =
         performance.now();
 
 
-    function step(
-        now
-    ) {
+    function step(now) {
 
-        if (!audio) {
+        /*
+         * Se outro áudio foi solicitado,
+         * este fade deixa imediatamente de atuar.
+         */
+        if (
+            generation !==
+            audioGeneration
+        ) {
+
+            return;
+        }
+
+
+        /*
+         * Se o áudio deixou de ser o atual,
+         * não deve mais controlar o volume.
+         */
+        if (
+            audio !== currentAudio
+        ) {
+
             return;
         }
 
@@ -823,85 +1153,21 @@ function fadeInAudio(
 
         const progress =
             Math.min(
-                elapsed / duration,
+                elapsed /
+                FADE_DURATION,
                 1
             );
 
 
-        audio.volume =
+        const volume =
             target *
             progress;
 
 
-        if (
-            progress < 1
-        ) {
-
-            requestAnimationFrame(
-                step
-            );
-        }
-    }
-
-
-    requestAnimationFrame(
-        step
-    );
-}
-
-
-// ============================================================
-// FADE OUT — ÁUDIO INDIVIDUAL
-// ============================================================
-
-function fadeOutAudio(
-    audio
-) {
-
-    if (!audio) {
-        return;
-    }
-
-
-    const startVolume =
-        audio.volume;
-
-
-    const duration =
-        FADE_DURATION;
-
-
-    const startTime =
-        performance.now();
-
-
-    function step(
-        now
-    ) {
-
-        if (!audio) {
-            return;
-        }
-
-
-        const elapsed =
-            now -
-            startTime;
-
-
-        const progress =
-            Math.min(
-                elapsed / duration,
-                1
-            );
-
-
-        audio.volume =
-            Math.max(
-                0,
-                startVolume *
-                (1 - progress)
-            );
+        setAudioVolume(
+            audio,
+            volume
+        );
 
 
         if (
@@ -914,13 +1180,114 @@ function fadeOutAudio(
 
         } else {
 
-            audio.pause();
+            setAudioVolume(
+                audio,
+                target
+            );
+        }
+    }
 
-            audio.currentTime =
-                0;
 
-            audio.src =
-                '';
+    requestAnimationFrame(
+        step
+    );
+}
+
+
+// ============================================================
+// FADE OUT
+// ============================================================
+
+function fadeOutAudio(
+    audio,
+    generation
+) {
+
+    if (!audio) {
+        return;
+    }
+
+
+    const startVolume =
+        clampVolume(
+            audio.volume
+        );
+
+
+    const startTime =
+        performance.now();
+
+
+    function step(now) {
+
+        /*
+         * Se houve uma nova troca de áudio,
+         * este fade antigo não pode mais mexer
+         * no volume.
+         */
+        if (
+            generation !==
+            audioGeneration
+        ) {
+
+            return;
+        }
+
+
+        const elapsed =
+            now -
+            startTime;
+
+
+        const progress =
+            Math.min(
+                elapsed /
+                FADE_DURATION,
+                1
+            );
+
+
+        const volume =
+            startVolume *
+            (
+                1 -
+                progress
+            );
+
+
+        setAudioVolume(
+            audio,
+            volume
+        );
+
+
+        if (
+            progress < 1
+        ) {
+
+            requestAnimationFrame(
+                step
+            );
+
+        } else {
+
+            setAudioVolume(
+                audio,
+                0
+            );
+
+
+            try {
+                audio.pause();
+            } catch (_) {}
+
+
+            /*
+             * Não precisamos mais desse recurso.
+             */
+            try {
+                audio.src = '';
+            } catch (_) {}
         }
     }
 
@@ -937,26 +1304,46 @@ function fadeOutAudio(
 
 function stopAudio() {
 
-    const audio =
-        currentAudio;
+    /*
+     * Invalida qualquer fade em andamento.
+     */
+    invalidateAudioFades();
 
 
-    currentAudio =
-        null;
+    if (currentAudio) {
+
+        const audio =
+            currentAudio;
+
+
+        currentAudio =
+            null;
+
+
+        try {
+
+            setAudioVolume(
+                audio,
+                0
+            );
+
+            audio.pause();
+
+            audio.src = '';
+
+        } catch (error) {
+
+            console.warn(
+                'Erro ao parar áudio:',
+                error
+            );
+        }
+    }
 
 
     currentEmotion =
         null;
-
-
-    if (audio) {
-
-        fadeOutAudio(
-            audio
-        );
-    }
 }
-
 
 
 // ============================================================
@@ -965,7 +1352,11 @@ function stopAudio() {
 
 function toggleCarousel() {
 
-    if (!hCtrl || !eCtrl) {
+    if (
+        !hCtrl ||
+        !eCtrl
+    ) {
+
         return;
     }
 
@@ -1011,41 +1402,118 @@ function toggleCarousel() {
 
 
     // ========================================================
-    // CARROSSEL ATIVADO
+    // ATIVA CARROSSEL
     // ========================================================
 
     if (carouselActive) {
 
-        // ----------------------------------------------------
-        // EmotionController continua ativo para que
-        // MediaPipe continue atualizando a segmentação.
-        // ----------------------------------------------------
 
+        /*
+         * IMPORTANTE:
+         *
+         * NÃO fazemos:
+         *
+         * eCtrl.active = false
+         *
+         * porque isso interromperia os loops
+         * de detecção do EmotionController.
+         *
+         * A detecção continua rodando, mas o
+         * callback onEmotionChange ignora suas
+         * alterações enquanto carouselActive = true.
+         */
         eCtrl.carouselMode =
             true;
 
 
-        // ----------------------------------------------------
-        // Para qualquer música que estava tocando.
-        // ----------------------------------------------------
-
+        /*
+         * Para o áudio da emoção detectada.
+         */
         stopAudio();
 
 
+        /*
+         * Ativa o carrossel visual.
+         *
+         * enableCarousel() chama internamente
+         * _applyCarouselFrame(), que por sua vez
+         * dispara _onCarouselChange.
+         *
+         * Como carouselActive já está true,
+         * o callback encontra videoTop e toca
+         * o áudio da expressão que está no topo.
+         */
         hCtrl.enableCarousel();
 
 
-        // ----------------------------------------------------
-        // IMPORTANTE:
-        //
-        // Depois de ativar o carrossel, descobrimos qual
-        // emoção está atualmente em videoTop e tocamos
-        // a música correspondente.
-        //
-        // Não usamos mais a música "carousel" como trilha
-        // principal enquanto o carrossel está rodando.
-        // ----------------------------------------------------
+        // ====================================================
+        // UI
+        // ====================================================
 
+        if (btn) {
+
+            btn.classList.add(
+                'active'
+            );
+
+            btn.innerHTML =
+                '∞ CARROSSEL ON';
+        }
+
+
+        if (infinityEl) {
+
+            infinityEl.classList.add(
+                'visible'
+            );
+        }
+
+
+        if (aiPanel) {
+
+            aiPanel.classList.add(
+                'hidden'
+            );
+        }
+
+
+        if (carouselPanel) {
+
+            carouselPanel.classList.remove(
+                'hidden'
+            );
+        }
+
+
+        if (hintEl) {
+
+            hintEl.classList.remove(
+                'hidden'
+            );
+        }
+
+
+        if (lBtn) {
+
+            lBtn.classList.add(
+                'locked'
+            );
+
+            lBtn.title =
+                'Indisponível no modo carrossel';
+        }
+
+
+        updateStatus(
+            'Modo Carrossel Ativo',
+            'warning'
+        );
+
+
+        /*
+         * Garante que a interface esteja sincronizada
+         * imediatamente após a ativação.
+         */
         const faces =
             hCtrl.getCurrentFaceEmotions();
 
@@ -1063,10 +1531,19 @@ function toggleCarousel() {
         );
 
 
+        /*
+         * Garante explicitamente o áudio da expressão
+         * que está em videoTop.
+         *
+         * Se o callback do enableCarousel() já tiver
+         * feito isso, playEmotionAudio() simplesmente
+         * não reinicia o mesmo áudio.
+         */
         const topFace =
             faces.find(
                 item =>
-                    item.face === 'videoTop'
+                    item.face ===
+                    'videoTop'
             );
 
 
@@ -1076,97 +1553,34 @@ function toggleCarousel() {
         ) {
 
             console.log(
-                'Carrossel iniciado — topo:',
+                'Carrossel iniciado — expressão no topo:',
                 topFace.emotion
             );
 
 
             playEmotionAudio(
                 topFace.emotion
-            );
-
-        } else {
-
-            // Fallback caso ainda não exista emoção no topo.
-            console.log(
-                'Carrossel iniciado — usando áudio genérico.'
-            );
-
-
-            playEmotionAudio(
-                'carousel'
             );
         }
 
 
-        // ----------------------------------------------------
-        // UI
-        // ----------------------------------------------------
-
-        hCtrl.enableCarousel();
-
-
-        btn.classList.add(
-            'active'
-        );
-
-
-        btn.innerHTML =
-            '∞ CARROSSEL ON';
-
-
-        infinityEl.classList.add(
-            'visible'
-        );
-
-
-        aiPanel.classList.add(
-            'hidden'
-        );
-
-
-        carouselPanel.classList.remove(
-            'hidden'
-        );
-
-
-        hintEl.classList.remove(
-            'hidden'
-        );
-
-
-        lBtn.classList.add(
-            'locked'
-        );
-
-
-        lBtn.title =
-            'Indisponível no modo carrossel';
-
-
-        updateStatus(
-            'Modo Carrossel Ativo',
-            'warning'
-        );
-
-
-        console.log(
-            'Carrossel ativado — segmentação continua ativa.'
-        );
-
-
-    // ========================================================
-    // CARROSSEL DESATIVADO
-    // ========================================================
-
     } else {
 
-        // ----------------------------------------------------
-        // EmotionController nunca foi desligado.
-        // ----------------------------------------------------
+
+        // ====================================================
+        // DESATIVA CARROSSEL
+        // ====================================================
 
         eCtrl.carouselMode =
             false;
+
+
+        /*
+         * A detecção já continuou rodando durante
+         * o carrossel. Apenas voltamos para o modo normal.
+         */
+        eCtrl.active =
+            true;
 
 
         stopAudio();
@@ -1178,42 +1592,61 @@ function toggleCarousel() {
         clearCarouselLabels();
 
 
-        btn.classList.remove(
-            'active'
-        );
+        // ====================================================
+        // UI
+        // ====================================================
+
+        if (btn) {
+
+            btn.classList.remove(
+                'active'
+            );
+
+            btn.innerHTML =
+                '∞ CARROSSEL';
+        }
 
 
-        btn.innerHTML =
-            '∞ CARROSSEL';
+        if (infinityEl) {
+
+            infinityEl.classList.remove(
+                'visible'
+            );
+        }
 
 
-        infinityEl.classList.remove(
-            'visible'
-        );
+        if (aiPanel) {
+
+            aiPanel.classList.remove(
+                'hidden'
+            );
+        }
 
 
-        aiPanel.classList.remove(
-            'hidden'
-        );
+        if (carouselPanel) {
+
+            carouselPanel.classList.add(
+                'hidden'
+            );
+        }
 
 
-        carouselPanel.classList.add(
-            'hidden'
-        );
+        if (hintEl) {
+
+            hintEl.classList.add(
+                'hidden'
+            );
+        }
 
 
-        hintEl.classList.add(
-            'hidden'
-        );
+        if (lBtn) {
 
+            lBtn.classList.remove(
+                'locked'
+            );
 
-        lBtn.classList.remove(
-            'locked'
-        );
-
-
-        lBtn.title =
-            '';
+            lBtn.title = '';
+        }
 
 
         updateStatus(
@@ -1240,6 +1673,9 @@ function toggleLandmarks() {
     }
 
 
+    /*
+     * Landmarks ficam bloqueados no carrossel.
+     */
     if (carouselActive) {
         return;
     }
@@ -1259,52 +1695,61 @@ function toggleLandmarks() {
         );
 
 
-    btn.classList.toggle(
-        'active',
-        landmarksActive
-    );
+    if (btn) {
+
+        btn.classList.toggle(
+            'active',
+            landmarksActive
+        );
 
 
-    btn.innerHTML =
-        landmarksActive
-            ? '⬡ PONTOS ON'
-            : '⬡ PONTOS FACIAIS';
+        btn.innerHTML =
+            landmarksActive
+                ? '⬡ PONTOS ON'
+                : '⬡ PONTOS FACIAIS';
+    }
 }
 
 
 // ============================================================
-// TECLADO
+// TECLADO — CARROSSEL
 // ============================================================
 
 document.addEventListener(
     'keydown',
-    (e) => {
+    event => {
 
         if (
             !carouselActive ||
             !hCtrl
         ) {
+
             return;
         }
 
 
         if (
-            e.key === 'ArrowRight' ||
-            e.key === 'ArrowDown'
+            event.key ===
+                'ArrowRight' ||
+            event.key ===
+                'ArrowDown'
         ) {
 
-            e.preventDefault();
+            event.preventDefault();
 
             hCtrl.rotateCarousel(
                 +1
             );
 
+
         } else if (
-            e.key === 'ArrowLeft' ||
-            e.key === 'ArrowUp'
+            event.key ===
+                'ArrowLeft' ||
+            event.key ===
+                'ArrowUp'
         ) {
 
-            e.preventDefault();
+            event.preventDefault();
 
             hCtrl.rotateCarousel(
                 -1
@@ -1315,7 +1760,7 @@ document.addEventListener(
 
 
 // ============================================================
-// UI
+// LABELS DO CARROSSEL
 // ============================================================
 
 function updateCarouselLabels(
@@ -1323,28 +1768,49 @@ function updateCarouselLabels(
 ) {
 
     const faceMap = {
-        videoTop: 'labelTop',
-        videoLeft: 'labelLeft',
-        videoRight: 'labelRight',
-        videoBottom: 'labelBottom'
+
+        videoTop:
+            'labelTop',
+
+        videoLeft:
+            'labelLeft',
+
+        videoRight:
+            'labelRight',
+
+        videoBottom:
+            'labelBottom'
     };
 
 
     const panelMap = {
-        videoTop: 'labelTopPanel',
-        videoLeft: 'labelLeftPanel',
-        videoRight: 'labelRightPanel',
-        videoBottom: 'labelBottomPanel'
+
+        videoTop:
+            'labelTopPanel',
+
+        videoLeft:
+            'labelLeftPanel',
+
+        videoRight:
+            'labelRightPanel',
+
+        videoBottom:
+            'labelBottomPanel'
     };
 
 
-    document
-        .getElementById(
+    const grid =
+        document.getElementById(
             'hologramGrid'
-        )
-        .classList.add(
+        );
+
+
+    if (grid) {
+
+        grid.classList.add(
             'carousel-active'
         );
+    }
 
 
     faceEmotions.forEach(
@@ -1353,6 +1819,7 @@ function updateCarouselLabels(
             emotion,
             color
         }) => {
+
 
             const el =
                 document.getElementById(
@@ -1365,11 +1832,14 @@ function updateCarouselLabels(
                 el.innerText =
                     emotion.toUpperCase();
 
+
                 el.style.color =
                     color;
 
+
                 el.style.borderColor =
-                    color + '88';
+                    color +
+                    '88';
             }
 
 
@@ -1384,6 +1854,7 @@ function updateCarouselLabels(
                 pel.innerText =
                     emotion.toUpperCase();
 
+
                 pel.style.color =
                     color;
             }
@@ -1392,17 +1863,30 @@ function updateCarouselLabels(
 }
 
 
+// ============================================================
+// LIMPA LABELS
+// ============================================================
+
 function clearCarouselLabels() {
 
-    document
-        .getElementById(
+    const grid =
+        document.getElementById(
             'hologramGrid'
-        )
-        .classList.remove(
+        );
+
+
+    if (grid) {
+
+        grid.classList.remove(
             'carousel-active'
         );
+    }
 }
 
+
+// ============================================================
+// WIDGET INFINITO
+// ============================================================
 
 function updateInfinityWidget(
     faceEmotions,
@@ -1417,10 +1901,18 @@ function updateInfinityWidget(
         );
 
 
+    /*
+     * Quando o carrossel é inicializado,
+     * inEmotion e outEmotion são null.
+     *
+     * Nesse caso não atualizamos os elementos
+     * de entrada/saída, apenas mantemos o widget.
+     */
     if (
         !widget ||
         !inEmotion
     ) {
+
         return;
     }
 
@@ -1454,6 +1946,7 @@ function updateInfinityWidget(
         inEl.innerText =
             inEmotion;
 
+
         inEl.style.color =
             inColor;
     }
@@ -1464,11 +1957,15 @@ function updateInfinityWidget(
         outEl.innerText =
             outEmotion;
 
+
         outEl.style.color =
             outColor;
     }
 
 
+    /*
+     * Reinicia a animação pulse.
+     */
     widget.classList.remove(
         'pulse'
     );
@@ -1498,15 +1995,18 @@ function updateStatus(
         );
 
 
-    if (status) {
-
-        status.innerText =
-            message;
-
-        status.className =
-            'small mb-2 text-' +
-            type;
+    if (!status) {
+        return;
     }
+
+
+    status.innerText =
+        message;
+
+
+    status.className =
+        'small mb-2 text-' +
+        type;
 }
 
 
@@ -1514,30 +2014,54 @@ function updateStatus(
 // EVENTOS
 // ============================================================
 
-document
-    .getElementById('startBtn')
-    .addEventListener(
+const startButton =
+    document.getElementById(
+        'startBtn'
+    );
+
+
+if (startButton) {
+
+    startButton.addEventListener(
         'click',
         start
     );
+}
 
 
-document
-    .getElementById('carouselToggleBtn')
-    .addEventListener(
+const carouselButton =
+    document.getElementById(
+        'carouselToggleBtn'
+    );
+
+
+if (carouselButton) {
+
+    carouselButton.addEventListener(
         'click',
         toggleCarousel
     );
+}
 
 
-document
-    .getElementById('landmarksToggleBtn')
-    .addEventListener(
-        'click',
-        toggleLandmarks
+const landmarksButton =
+    document.getElementById(
+        'landmarksToggleBtn'
     );
 
 
+if (landmarksButton) {
+
+    landmarksButton.addEventListener(
+        'click',
+        toggleLandmarks
+    );
+}
+
+
+// ============================================================
+// WINDOW LOAD
+// ============================================================
+
 window.onload =
     init;
-
