@@ -1,8 +1,17 @@
-
 // ============================================================
 // ANGRY EFFECTS
-// Sistema visual procedural para a emoção "angry"
-// Compatível com EmotionController / detec_emotion.js
+// Sistema procedural de efeitos visuais para a emoção ANGRY
+//
+// Conceito:
+// - tensão
+// - pulsação
+// - micro-glitches
+// - fragmentos digitais
+// - partículas lançadas para fora
+// - picos de raiva
+// - flashes rápidos
+//
+// Não altera a detecção de emoções.
 // ============================================================
 
 export class AngryEffects {
@@ -10,413 +19,455 @@ export class AngryEffects {
     constructor() {
 
         // =====================================================
-        // ESTADO DA EMOÇÃO
+        // ESTADO
         // =====================================================
 
-        this.currentEmotion = 'neutral';
+        this.emotion = 'neutral';
 
-        this.targetIntensity = 0;
+        this.confidence = 0;
 
         this.intensity = 0;
 
+        this.targetIntensity = 0;
+
+        this.time = performance.now();
 
         // =====================================================
-        // ANIMAÇÃO
-        // =====================================================
-
-        this.time = 0;
-
-        this._lastUpdateTime = 0;
-
-
-        // Velocidade de entrada do efeito
-
-        this._fadeInSpeed = 0.006;
-
-
-        // Velocidade de saída
-
-        this._fadeOutSpeed = 0.004;
-
-
-        // =====================================================
-        // PARTÍCULAS / FAÍSCAS
-        // =====================================================
-
-        this.particles = [];
-
-        this._particleCount = 18;
-
-
-        // =====================================================
-        // ONDULAÇÃO
-        // =====================================================
-
-        this.waveTime = 0;
-
-
-        // =====================================================
-        // RANDOM SEED
-        // =====================================================
-
-        this._randomSeed = Math.random() * 10000;
-
-
-        // =====================================================
-        // CONFIGURAÇÃO VISUAL
+        // CONFIGURAÇÃO
         // =====================================================
 
         this.config = {
 
-            // intensidade geral
-            maxIntensity: 1,
+            // -------------------------------------------------
+            // velocidade geral
+            // -------------------------------------------------
 
+            pulseSpeed: 0.006,
+
+            // -------------------------------------------------
+            // intensidade máxima do brilho
+            // -------------------------------------------------
+
+            maxGlow: 0.42,
+
+            // -------------------------------------------------
+            // quantidade de fragmentos
+            // -------------------------------------------------
+
+            maxFragments: 18,
+
+            // -------------------------------------------------
             // quantidade de partículas
-            particleCount: 18,
+            // -------------------------------------------------
 
-            // velocidade das partículas
-            particleSpeed: 0.035,
+            maxParticles: 24,
 
-            // vida das partículas
-            particleLife: 900,
+            // -------------------------------------------------
+            // frequência de glitches
+            // -------------------------------------------------
 
-            // tamanho mínimo
-            minParticleSize: 1.2,
+            glitchIntervalMin: 350,
 
-            // tamanho máximo
-            maxParticleSize: 4.5,
+            glitchIntervalMax: 1100,
 
-            // espessura das linhas
-            lineWidth: 1.5,
+            // -------------------------------------------------
+            // duração do glitch
+            // -------------------------------------------------
 
-            // quantidade de linhas de tensão
-            tensionLines: 7
+            glitchDuration: 70,
+
+            // -------------------------------------------------
+            // intervalo médio entre picos
+            // -------------------------------------------------
+
+            peakIntervalMin: 1400,
+
+            peakIntervalMax: 3200
 
         };
 
+        // =====================================================
+        // GLITCH
+        // =====================================================
+
+        this.glitchTimer = 0;
+
+        this.nextGlitch =
+            this._random(
+                this.config.glitchIntervalMin,
+                this.config.glitchIntervalMax
+            );
+
+        this.glitchRemaining = 0;
 
         // =====================================================
-        // CRIA PARTÍCULAS
+        // PICO
         // =====================================================
 
-        this._createParticles();
-    }
+        this.peakTimer = 0;
 
+        this.nextPeak =
+            this._random(
+                this.config.peakIntervalMin,
+                this.config.peakIntervalMax
+            );
 
-    // =========================================================
-    // CRIA PARTÍCULAS
-    // =========================================================
+        this.peakIntensity = 0;
 
-    _createParticles() {
+        // =====================================================
+        // FRAGMENTOS
+        // =====================================================
+
+        this.fragments = [];
+
+        // =====================================================
+        // PARTÍCULAS
+        // =====================================================
 
         this.particles = [];
 
+        // =====================================================
+        // FLASH
+        // =====================================================
 
-        for (
-            let i = 0;
-            i < this._particleCount;
-            i++
-        ) {
+        this.flash = 0;
 
-            this.particles.push({
-
-                x: Math.random(),
-
-                y: Math.random(),
-
-                vx:
-                    (Math.random() - 0.5) *
-                    0.001,
-
-                vy:
-                    (Math.random() - 0.5) *
-                    0.001,
-
-                size:
-                    this.config.minParticleSize +
-                    Math.random() *
-                    (
-                        this.config.maxParticleSize -
-                        this.config.minParticleSize
-                    ),
-
-                life:
-                    Math.random() *
-                    this.config.particleLife,
-
-                maxLife:
-                    this.config.particleLife *
-                    (
-                        0.7 +
-                        Math.random() * 0.6
-                    ),
-
-                phase:
-                    Math.random() *
-                    Math.PI *
-                    2,
-
-                speed:
-                    0.5 +
-                    Math.random() * 1.5
-
-            });
-        }
     }
 
 
     // =========================================================
-    // ALTERA EMOÇÃO
+    // RECEBE EMOÇÃO
     // =========================================================
 
     setEmotion(
         emotion,
-        confidence = 0
+        confidence
     ) {
 
-        this.currentEmotion =
+        this.emotion =
             emotion || 'neutral';
 
+        this.confidence =
+            confidence || 0;
 
-        // =====================================================
-        // SOMENTE ANGRY ATIVA O SISTEMA
-        // =====================================================
+
+        // -----------------------------------------------------
+        // ANGRY
+        // -----------------------------------------------------
 
         if (
-            this.currentEmotion === 'angry'
+            this.emotion === 'angry'
         ) {
 
-            const normalizedConfidence =
+            this.targetIntensity =
                 Math.max(
                     0,
                     Math.min(
                         1,
-                        Number(confidence) || 0
+                        (
+                            this.confidence -
+                            0.30
+                        ) / 0.70
                     )
-                );
-
-
-            /*
-             * Evita que uma confiança muito baixa
-             * produza um efeito exagerado.
-             */
-
-            this.targetIntensity =
-                Math.max(
-                    0.25,
-                    normalizedConfidence
                 );
 
         } else {
 
             this.targetIntensity = 0;
+
         }
+
     }
 
 
     // =========================================================
-    // ATUALIZA ANIMAÇÃO
+    // UPDATE
     // =========================================================
 
-    update(delta = 16) {
+    update(delta) {
 
-        // proteção contra valores inválidos
-
-        if (
-            !Number.isFinite(delta) ||
-            delta < 0
-        ) {
-
-            delta = 16;
-        }
-
-
-        // evita saltos gigantes
-
-        delta =
-            Math.min(
-                delta,
-                50
-            );
-
-
-        // =====================================================
-        // TEMPO
-        // =====================================================
-
-        this.time += delta;
-
-        this.waveTime +=
-            delta * 0.002;
-
-
-        // =====================================================
-        // TRANSIÇÃO DA INTENSIDADE
-        // =====================================================
-
-        if (
-            this.intensity <
-            this.targetIntensity
-        ) {
-
-            this.intensity +=
-                this._fadeInSpeed *
-                delta;
-
-        } else if (
-            this.intensity >
-            this.targetIntensity
-        ) {
-
-            this.intensity -=
-                this._fadeOutSpeed *
-                delta;
-        }
-
-
-        this.intensity =
+        const dt =
             Math.max(
                 0,
                 Math.min(
-                    1,
-                    this.intensity
+                    delta,
+                    100
                 )
             );
 
 
-        // =====================================================
-        // ATUALIZA PARTÍCULAS
-        // =====================================================
+        // -----------------------------------------------------
+        // SUAVIZA INTENSIDADE
+        // -----------------------------------------------------
 
-        this._updateParticles(
-            delta
-        );
-    }
+        const smoothing =
+            this.targetIntensity >
+            this.intensity
+                ? 0.08
+                : 0.045;
+
+        this.intensity +=
+            (
+                this.targetIntensity -
+                this.intensity
+            ) *
+            smoothing;
 
 
-    // =========================================================
-    // ATUALIZA PARTÍCULAS
-    // =========================================================
+        // -----------------------------------------------------
+        // TEMPO
+        // -----------------------------------------------------
 
-    _updateParticles(delta) {
+        this.time += dt;
 
-        for (
-            const particle
-            of this.particles
+
+        // -----------------------------------------------------
+        // GLITCH
+        // -----------------------------------------------------
+
+        if (
+            this.intensity > 0.05
         ) {
 
-            particle.life -=
-                delta;
+            this.glitchTimer += dt;
+
+            if (
+                this.glitchTimer >=
+                this.nextGlitch
+            ) {
+
+                this.glitchRemaining =
+                    this.config.glitchDuration *
+                    (
+                        0.7 +
+                        this.intensity * 0.8
+                    );
+
+                this.glitchTimer = 0;
+
+                this.nextGlitch =
+                    this._random(
+                        this.config.glitchIntervalMin,
+                        this.config.glitchIntervalMax
+                    ) *
+                    (
+                        1.25 -
+                        this.intensity * 0.45
+                    );
+
+            }
+
+        } else {
+
+            this.glitchTimer = 0;
+
+            this.glitchRemaining = 0;
+
+        }
 
 
-            // =================================================
-            // RENOVA PARTÍCULA
-            // =================================================
+        if (
+            this.glitchRemaining > 0
+        ) {
+
+            this.glitchRemaining -= dt;
+
+        }
+
+
+        // -----------------------------------------------------
+        // PICO DE RAIVA
+        // -----------------------------------------------------
+
+        if (
+            this.intensity > 0.18
+        ) {
+
+            this.peakTimer += dt;
+
+            if (
+                this.peakTimer >=
+                this.nextPeak
+            ) {
+
+                this.peakTimer = 0;
+
+                this.peakIntensity =
+                    0.55 +
+                    Math.random() *
+                    0.45;
+
+                this.flash =
+                    0.15 +
+                    Math.random() *
+                    0.25;
+
+                this._spawnPeakFragments();
+
+                this._spawnPeakParticles();
+
+                this.nextPeak =
+                    this._random(
+                        this.config.peakIntervalMin,
+                        this.config.peakIntervalMax
+                    ) /
+                    (
+                        0.65 +
+                        this.intensity * 0.5
+                    );
+
+            }
+
+        } else {
+
+            this.peakTimer = 0;
+
+        }
+
+
+        // -----------------------------------------------------
+        // DECAY DO PICO
+        // -----------------------------------------------------
+
+        this.peakIntensity *=
+            Math.pow(
+                0.90,
+                dt / 16.67
+            );
+
+
+        // -----------------------------------------------------
+        // DECAY DO FLASH
+        // -----------------------------------------------------
+
+        this.flash *=
+            Math.pow(
+                0.82,
+                dt / 16.67
+            );
+
+
+        // -----------------------------------------------------
+        // ATUALIZA FRAGMENTOS
+        // -----------------------------------------------------
+
+        for (
+            let i =
+                this.fragments.length - 1;
+            i >= 0;
+            i--
+        ) {
+
+            const fragment =
+                this.fragments[i];
+
+            fragment.life -= dt;
+
+            fragment.x +=
+                fragment.vx *
+                dt;
+
+            fragment.y +=
+                fragment.vy *
+                dt;
+
+            fragment.rotation +=
+                fragment.rotationSpeed *
+                dt;
+
+            fragment.vx *=
+                Math.pow(
+                    0.996,
+                    dt
+                );
+
+            fragment.vy *=
+                Math.pow(
+                    0.996,
+                    dt
+                );
+
+            if (
+                fragment.life <= 0
+            ) {
+
+                this.fragments.splice(
+                    i,
+                    1
+                );
+
+            }
+
+        }
+
+
+        // -----------------------------------------------------
+        // ATUALIZA PARTÍCULAS
+        // -----------------------------------------------------
+
+        for (
+            let i =
+                this.particles.length - 1;
+            i >= 0;
+            i--
+        ) {
+
+            const particle =
+                this.particles[i];
+
+            particle.life -= dt;
+
+            particle.x +=
+                particle.vx *
+                dt;
+
+            particle.y +=
+                particle.vy *
+                dt;
+
+            particle.vx *=
+                Math.pow(
+                    0.997,
+                    dt
+                );
+
+            particle.vy *=
+                Math.pow(
+                    0.997,
+                    dt
+                );
 
             if (
                 particle.life <= 0
             ) {
 
-                particle.x =
-                    Math.random();
+                this.particles.splice(
+                    i,
+                    1
+                );
 
-                particle.y =
-                    Math.random();
-
-                particle.vx =
-                    (
-                        Math.random() -
-                        0.5
-                    ) *
-                    0.001;
-
-                particle.vy =
-                    (
-                        Math.random() -
-                        0.5
-                    ) *
-                    0.001;
-
-                particle.life =
-                    particle.maxLife;
             }
 
-
-            // =================================================
-            // MOVIMENTO
-            // =================================================
-
-            particle.x +=
-                particle.vx *
-                delta *
-                this.config.particleSpeed *
-                20;
-
-
-            particle.y +=
-                particle.vy *
-                delta *
-                this.config.particleSpeed *
-                20;
-
-
-            // =================================================
-            // MOVIMENTO ORGÂNICO
-            // =================================================
-
-            particle.x +=
-                Math.sin(
-                    this.time *
-                    0.003 *
-                    particle.speed +
-                    particle.phase
-                ) *
-                0.00012 *
-                delta;
-
-
-            particle.y +=
-                Math.cos(
-                    this.time *
-                    0.002 *
-                    particle.speed +
-                    particle.phase
-                ) *
-                0.00008 *
-                delta;
-
-
-            // =================================================
-            // WRAP
-            // =================================================
-
-            if (
-                particle.x < 0
-            ) {
-
-                particle.x = 1;
-
-            } else if (
-                particle.x > 1
-            ) {
-
-                particle.x = 0;
-            }
-
-
-            if (
-                particle.y < 0
-            ) {
-
-                particle.y = 1;
-
-            } else if (
-                particle.y > 1
-            ) {
-
-                particle.y = 0;
-            }
         }
+
+
+        // -----------------------------------------------------
+        // QUANDO SAI DO ANGRY
+        // -----------------------------------------------------
+
+        if (
+            this.intensity < 0.01 &&
+            this.targetIntensity <= 0
+        ) {
+
+            this.fragments.length = 0;
+
+            this.particles.length = 0;
+
+            this.peakIntensity = 0;
+
+        }
+
     }
 
 
@@ -426,97 +477,201 @@ export class AngryEffects {
 
     draw(
         ctx,
-        options = {}
+        options
     ) {
 
         if (
-            !ctx
+            !ctx ||
+            !options
         ) {
 
             return;
+
         }
 
 
-        // =====================================================
-        // SE NÃO É ANGRY, NÃO DESENHA
-        // =====================================================
+        const {
 
-        if (
-            this.intensity <= 0.001
-        ) {
+            drawX = 0,
+            drawY = 0,
+            drawWidth = ctx.canvas.width,
+            drawHeight = ctx.canvas.height
 
-            return;
-        }
-
-
-        // =====================================================
-        // PARÂMETROS RECEBIDOS DO EmotionController
-        // =====================================================
-
-        const drawX =
-            Number(options.drawX) || 0;
-
-        const drawY =
-            Number(options.drawY) || 0;
-
-        const drawWidth =
-            Number(options.drawWidth) || 0;
-
-        const drawHeight =
-            Number(options.drawHeight) || 0;
+        } = options;
 
 
         if (
-            drawWidth <= 0 ||
-            drawHeight <= 0
+            this.intensity < 0.01
         ) {
 
             return;
+
         }
 
 
-        const intensity =
+        const cx =
+            drawX +
+            drawWidth / 2;
+
+        const cy =
+            drawY +
+            drawHeight * 0.45;
+
+
+        // =====================================================
+        // INTENSIDADE
+        // =====================================================
+
+        const pulse =
+            (
+                Math.sin(
+                    this.time *
+                    this.config.pulseSpeed
+                ) +
+                1
+            ) /
+            2;
+
+
+        const tension =
+            this.intensity *
+            (
+                0.72 +
+                pulse * 0.28
+            );
+
+
+        const peak =
+            this.peakIntensity *
             this.intensity;
 
-
-        // =====================================================
-        // SALVA CONTEXTO
-        // =====================================================
 
         ctx.save();
 
 
-        /*
-         * Tudo fica limitado à área da cabeça.
-         */
+        // =====================================================
+        // MODO DE COMPOSIÇÃO
+        // =====================================================
 
-        ctx.beginPath();
+        ctx.globalCompositeOperation =
+            'screen';
 
-        ctx.rect(
+
+        // =====================================================
+        // HALO VERMELHO
+        // =====================================================
+
+        const glowRadius =
+            Math.min(
+                drawWidth,
+                drawHeight
+            ) *
+            (
+                0.28 +
+                tension * 0.12
+            );
+
+
+        const gradient =
+            ctx.createRadialGradient(
+                cx,
+                cy,
+                glowRadius * 0.15,
+                cx,
+                cy,
+                glowRadius
+            );
+
+
+        gradient.addColorStop(
+            0,
+            `rgba(255, 20, 20, ${
+                0.035 +
+                tension * 0.055
+            })`
+        );
+
+
+        gradient.addColorStop(
+            0.55,
+            `rgba(190, 0, 0, ${
+                tension * 0.045
+            })`
+        );
+
+
+        gradient.addColorStop(
+            1,
+            'rgba(120, 0, 0, 0)'
+        );
+
+
+        ctx.fillStyle =
+            gradient;
+
+
+        ctx.fillRect(
             drawX,
             drawY,
             drawWidth,
             drawHeight
         );
 
-        ctx.clip();
+
+        // =====================================================
+        // FLASH DE PICO
+        // =====================================================
+
+        if (
+            this.flash > 0.01
+        ) {
+
+            ctx.fillStyle =
+                `rgba(255, 30, 30, ${
+                    this.flash *
+                    this.intensity *
+                    0.12
+                })`;
+
+            ctx.fillRect(
+                drawX,
+                drawY,
+                drawWidth,
+                drawHeight
+            );
+
+        }
 
 
         // =====================================================
-        // EFEITO DE TENSÃO AO REDOR DA CABEÇA
+        // GLITCH
         // =====================================================
 
-        this._drawTensionLines(
+        if (
+            this.glitchRemaining > 0
+        ) {
 
+            this._drawGlitch(
+                ctx,
+                drawX,
+                drawY,
+                drawWidth,
+                drawHeight,
+                tension
+            );
+
+        }
+
+
+        // =====================================================
+        // FRAGMENTOS
+        // =====================================================
+
+        this._drawFragments(
             ctx,
-
+            tension,
             drawX,
-            drawY,
-            drawWidth,
-            drawHeight,
-
-            intensity
-
+            drawY
         );
 
 
@@ -525,46 +680,38 @@ export class AngryEffects {
         // =====================================================
 
         this._drawParticles(
-
             ctx,
-
+            tension,
             drawX,
-            drawY,
-            drawWidth,
-            drawHeight,
-
-            intensity
-
+            drawY
         );
 
 
         // =====================================================
-        // LINHAS DE ENERGIA
+        // RACHADURAS RADIAIS
         // =====================================================
 
-        this._drawEnergyWaves(
-
+        this._drawEnergyCracks(
             ctx,
-
-            drawX,
-            drawY,
+            cx,
+            cy,
             drawWidth,
             drawHeight,
-
-            intensity
-
+            tension,
+            peak
         );
 
 
         ctx.restore();
+
     }
 
 
     // =========================================================
-    // LINHAS DE TENSÃO
+    // GLITCH
     // =========================================================
 
-    _drawTensionLines(
+    _drawGlitch(
         ctx,
         x,
         y,
@@ -573,110 +720,139 @@ export class AngryEffects {
         intensity
     ) {
 
-        const count =
-            this.config.tensionLines;
-
-
-        ctx.save();
-
-
-        ctx.lineWidth =
-            this.config.lineWidth *
-            (
-                0.6 +
-                intensity *
-                1.4
+        const number =
+            Math.floor(
+                2 +
+                intensity * 5
             );
 
-
-        ctx.globalAlpha =
-            0.12 +
-            intensity *
-            0.35;
-
-
-        /*
-         * As linhas ficam principalmente
-         * nas regiões laterais e superiores,
-         * criando uma sensação de tensão.
-         */
 
         for (
             let i = 0;
-            i < count;
+            i < number;
             i++
         ) {
 
-            const phase =
-                this.waveTime *
-                1.5 +
-                i *
-                1.7;
+            const barHeight =
+                1 +
+                Math.random() *
+                Math.max(
+                    2,
+                    height * 0.018
+                );
 
 
-            const side =
-                i % 2 === 0
-                    ? -1
-                    : 1;
-
-
-            const normalizedY =
-                0.12 +
-                (
-                    i /
-                    Math.max(
-                        1,
-                        count - 1
-                    )
-                ) *
-                0.76;
-
-
-            const startX =
-                side < 0
-                    ? x + width * 0.08
-                    : x + width * 0.92;
-
-
-            const endX =
-                side < 0
-                    ? x + width * 0.02
-                    : x + width * 0.98;
-
-
-            const startY =
+            const barY =
                 y +
-                height *
-                normalizedY;
+                Math.random() *
+                height;
 
 
-            const endY =
-                startY +
-                Math.sin(phase) *
-                height *
-                0.035;
+            const offset =
+                (
+                    Math.random() -
+                    0.5
+                ) *
+                width *
+                0.045 *
+                intensity;
 
 
-            ctx.beginPath();
+            const alpha =
+                0.10 +
+                Math.random() *
+                0.20;
 
 
-            ctx.moveTo(
-                startX,
-                startY
+            ctx.fillStyle =
+                `rgba(255, 25, 25, ${alpha})`;
+
+
+            ctx.fillRect(
+                x + offset,
+                barY,
+                width,
+                barHeight
             );
 
-
-            ctx.lineTo(
-                endX,
-                endY
-            );
-
-
-            ctx.stroke();
         }
 
+    }
 
-        ctx.restore();
+
+    // =========================================================
+    // FRAGMENTOS
+    // =========================================================
+
+    _drawFragments(
+        ctx,
+        intensity,
+        drawX,
+        drawY
+    ) {
+
+        for (
+            const fragment
+            of this.fragments
+        ) {
+
+            const alpha =
+                Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        fragment.life /
+                        fragment.maxLife
+                    )
+                ) *
+                intensity;
+
+
+            if (
+                alpha <= 0
+            ) {
+
+                continue;
+
+            }
+
+
+            ctx.save();
+
+
+            ctx.translate(
+                drawX +
+                fragment.x,
+                drawY +
+                fragment.y
+            );
+
+
+            ctx.rotate(
+                fragment.rotation
+            );
+
+
+            ctx.globalAlpha =
+                alpha;
+
+
+            ctx.fillStyle =
+                fragment.color;
+
+
+            ctx.fillRect(
+                -fragment.width / 2,
+                -fragment.height / 2,
+                fragment.width,
+                fragment.height
+            );
+
+
+            ctx.restore();
+
+        }
+
     }
 
 
@@ -686,25 +862,17 @@ export class AngryEffects {
 
     _drawParticles(
         ctx,
-        x,
-        y,
-        width,
-        height,
-        intensity
+        intensity,
+        drawX,
+        drawY
     ) {
-
-        ctx.save();
-
 
         for (
             const particle
             of this.particles
         ) {
 
-            // partículas ficam quase invisíveis
-            // quando o angry está fraco
-
-            const lifeRatio =
+            const alpha =
                 Math.max(
                     0,
                     Math.min(
@@ -712,206 +880,413 @@ export class AngryEffects {
                         particle.life /
                         particle.maxLife
                     )
-                );
-
-
-            const alpha =
-                intensity *
-                lifeRatio *
-                0.55;
-
-
-            if (
-                alpha <= 0.01
-            ) {
-
-                continue;
-            }
-
-
-            const px =
-                x +
-                particle.x *
-                width;
-
-
-            const py =
-                y +
-                particle.y *
-                height;
-
-
-            const pulse =
-                0.7 +
-                Math.sin(
-                    this.time *
-                    0.006 +
-                    particle.phase
                 ) *
-                0.3;
-
-
-            const size =
-                particle.size *
-                (
-                    0.6 +
-                    intensity *
-                    0.8
-                ) *
-                pulse;
+                intensity;
 
 
             ctx.globalAlpha =
                 alpha;
 
 
-            ctx.beginPath();
+            ctx.fillStyle =
+                particle.color;
 
 
-            ctx.arc(
-                px,
-                py,
-                size,
-                0,
-                Math.PI * 2
+            ctx.fillRect(
+                drawX +
+                particle.x,
+                drawY +
+                particle.y,
+                particle.size,
+                particle.size
             );
 
-
-            ctx.fill();
         }
 
+        ctx.globalAlpha = 1;
 
-        ctx.restore();
     }
 
 
     // =========================================================
-    // ONDAS DE ENERGIA
+    // RACHADURAS / ENERGIA
     // =========================================================
 
-    _drawEnergyWaves(
+    _drawEnergyCracks(
         ctx,
-        x,
-        y,
+        cx,
+        cy,
         width,
         height,
-        intensity
+        intensity,
+        peak
     ) {
+
+        const count =
+            Math.floor(
+                4 +
+                intensity * 6
+            );
+
 
         ctx.save();
 
 
         ctx.lineWidth =
-            0.8 +
-            intensity *
-            1.5;
-
-
-        ctx.globalAlpha =
-            0.08 +
-            intensity *
-            0.20;
-
-
-        /*
-         * Ondas horizontais discretas.
-         */
-
-        const waveCount = 4;
+            1 +
+            intensity * 1.5;
 
 
         for (
             let i = 0;
-            i < waveCount;
+            i < count;
             i++
         ) {
 
-            const baseY =
-                y +
-                height *
+            const angle =
                 (
-                    0.20 +
-                    i *
-                    0.20
+                    Math.PI * 2 *
+                    i /
+                    count
+                ) +
+                Math.sin(
+                    this.time *
+                    0.002 +
+                    i
+                ) *
+                0.15;
+
+
+            const startRadius =
+                Math.min(
+                    width,
+                    height
+                ) *
+                (
+                    0.27 +
+                    Math.random() *
+                    0.08
                 );
 
 
-            const amplitude =
-                height *
-                0.012 *
-                intensity;
+            const length =
+                Math.min(
+                    width,
+                    height
+                ) *
+                (
+                    0.035 +
+                    intensity * 0.06 +
+                    peak * 0.05
+                );
 
 
-            const frequency =
-                0.012 +
-                i *
-                0.002;
+            const sx =
+                cx +
+                Math.cos(angle) *
+                startRadius;
+
+
+            const sy =
+                cy +
+                Math.sin(angle) *
+                startRadius;
+
+
+            const ex =
+                sx +
+                Math.cos(angle) *
+                length;
+
+
+            const ey =
+                sy +
+                Math.sin(angle) *
+                length;
+
+
+            const alpha =
+                0.04 +
+                intensity * 0.10 +
+                peak * 0.12;
+
+
+            ctx.strokeStyle =
+                `rgba(255, 40, 40, ${alpha})`;
 
 
             ctx.beginPath();
 
-
-            const step =
-                Math.max(
-                    8,
-                    width / 80
-                );
+            ctx.moveTo(
+                sx,
+                sy
+            );
 
 
-            for (
-                let px = 0;
-                px <= width;
-                px += step
-            ) {
+            // pequeno desvio para parecer
+            // uma fratura digital
 
-                const wave =
-                    Math.sin(
-                        px *
-                        frequency +
-                        this.waveTime *
-                        (
-                            2 +
-                            i *
-                            0.5
-                        )
-                    ) *
-                    amplitude;
+            const mx =
+                (
+                    sx +
+                    ex
+                ) / 2 +
+                (
+                    Math.random() -
+                    0.5
+                ) *
+                length *
+                0.35;
 
 
-                const py =
-                    baseY +
-                    wave;
+            const my =
+                (
+                    sy +
+                    ey
+                ) / 2 +
+                (
+                    Math.random() -
+                    0.5
+                ) *
+                length *
+                0.35;
 
 
-                if (
-                    px === 0
-                ) {
+            ctx.lineTo(
+                mx,
+                my
+            );
 
-                    ctx.moveTo(
-                        x + px,
-                        py
-                    );
 
-                } else {
-
-                    ctx.lineTo(
-                        x + px,
-                        py
-                    );
-                }
-            }
+            ctx.lineTo(
+                ex,
+                ey
+            );
 
 
             ctx.stroke();
+
         }
 
 
         ctx.restore();
+
     }
+
+
+    // =========================================================
+    // CRIA FRAGMENTOS
+    // =========================================================
+
+    _spawnPeakFragments() {
+
+        const amount =
+            Math.floor(
+                5 +
+                this.intensity * 8
+            );
+
+
+        for (
+            let i = 0;
+            i < amount;
+            i++
+        ) {
+
+            if (
+                this.fragments.length >=
+                this.config.maxFragments
+            ) {
+
+                break;
+
+            }
+
+
+            const angle =
+                Math.random() *
+                Math.PI *
+                2;
+
+
+            const radius =
+                85 +
+                Math.random() *
+                80;
+
+
+            const speed =
+                0.025 +
+                Math.random() *
+                0.09;
+
+
+            this.fragments.push({
+
+                x:
+                    Math.cos(angle) *
+                    radius,
+
+                y:
+                    Math.sin(angle) *
+                    radius *
+                    0.8,
+
+                vx:
+                    Math.cos(angle) *
+                    speed,
+
+                vy:
+                    Math.sin(angle) *
+                    speed,
+
+                width:
+                    2 +
+                    Math.random() * 7,
+
+                height:
+                    1 +
+                    Math.random() * 3,
+
+                rotation:
+                    Math.random() *
+                    Math.PI,
+
+                rotationSpeed:
+                    (
+                        Math.random() -
+                        0.5
+                    ) *
+                    0.01,
+
+                life:
+                    350 +
+                    Math.random() *
+                    700,
+
+                maxLife:
+                    1050,
+
+                color:
+                    Math.random() > 0.35
+                        ? '#ff2020'
+                        : '#ff6666'
+
+            });
+
+        }
+
+    }
+
+
+    // =========================================================
+    // CRIA PARTÍCULAS
+    // =========================================================
+
+    _spawnPeakParticles() {
+
+        const amount =
+            Math.floor(
+                5 +
+                this.intensity * 10
+            );
+
+
+        for (
+            let i = 0;
+            i < amount;
+            i++
+        ) {
+
+            if (
+                this.particles.length >=
+                this.config.maxParticles
+            ) {
+
+                break;
+
+            }
+
+
+            const angle =
+                Math.random() *
+                Math.PI *
+                2;
+
+
+            const radius =
+                70 +
+                Math.random() *
+                120;
+
+
+            const speed =
+                0.025 +
+                Math.random() *
+                0.08;
+
+
+            this.particles.push({
+
+                x:
+                    Math.cos(angle) *
+                    radius,
+
+                y:
+                    Math.sin(angle) *
+                    radius *
+                    0.85,
+
+                vx:
+                    Math.cos(angle) *
+                    speed,
+
+                vy:
+                    Math.sin(angle) *
+                    speed,
+
+                size:
+                    1 +
+                    Math.random() * 3,
+
+                life:
+                    300 +
+                    Math.random() *
+                    600,
+
+                maxLife:
+                    900,
+
+                color:
+                    Math.random() > 0.3
+                        ? '#ff3030'
+                        : '#ff9090'
+
+            });
+
+        }
+
+    }
+
+
+    // =========================================================
+    // UTILITÁRIO
+    // =========================================================
+
+    _random(
+        min,
+        max
+    ) {
+
+        return (
+            min +
+            Math.random() *
+            (
+                max -
+                min
+            )
+        );
+
+    }
+
 }
-
-
-// ============================================================
-// FIM
-// ============================================================
-
