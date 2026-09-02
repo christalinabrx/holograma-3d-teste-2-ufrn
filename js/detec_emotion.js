@@ -1,4 +1,5 @@
 import { HolographicTears } from './holographic_tears.js';
+import { AngryEffects } from './angry_effects.js';
 
 export class EmotionController {
 
@@ -38,7 +39,13 @@ export class EmotionController {
 
         this._tears =
             new HolographicTears();
+        
+        // =====================================================
+        // SISTEMA VISUAL DO ANGRY
+        // =====================================================
 
+        this._angry =
+            new AngryEffects();
 
         // =====================================================
         // MODO CARROSSEL
@@ -1488,6 +1495,19 @@ export class EmotionController {
             );
         }
 
+        // =====================================================
+        // ATUALIZA EFEITOS DO ANGRY
+        // =====================================================
+
+if (
+    this._angry
+) {
+
+    this._angry.setEmotion(
+        emotion,
+        confidence
+    );
+}
 
         // =====================================================
         // ENVIA PARA O SISTEMA PRINCIPAL
@@ -1514,14 +1534,51 @@ export class EmotionController {
 
     _renderLoop() {
 
-        this._drawAll();
+    // =====================================================
+    // ATUALIZA EFEITOS DO ANGRY
+    // =====================================================
 
+    if (
+        this._angry
+    ) {
 
-        requestAnimationFrame(
-            () =>
-                this._renderLoop()
+        const now =
+            performance.now();
+
+        if (
+            !this._angry._lastUpdateTime
+        ) {
+
+            this._angry._lastUpdateTime =
+                now;
+
+        }
+
+        const delta =
+            now -
+            this._angry._lastUpdateTime;
+
+        this._angry._lastUpdateTime =
+            now;
+
+        this._angry.update(
+            delta
         );
     }
+
+
+    // =====================================================
+    // DESENHA
+    // =====================================================
+
+    this._drawAll();
+
+
+    requestAnimationFrame(
+        () =>
+            this._renderLoop()
+    );
+}
 
 
     // =========================================================
@@ -2000,6 +2057,33 @@ export class EmotionController {
                 }
 
             );
+
+            // =====================================================
+// EFEITOS VISUAIS DO ANGRY
+// =====================================================
+
+if (
+    this._angry
+) {
+
+    this._angry.draw(
+        ctx,
+        {
+            drawX:
+                drawX,
+
+            drawY:
+                drawY,
+
+            drawWidth:
+                drawWidth,
+
+            drawHeight:
+                drawHeight
+        }
+    );
+}
+            
         }
     }
 
