@@ -1,3 +1,4 @@
+
 import { HolographicTears } from './holographic_tears.js';
 
 export class EmotionController {
@@ -68,27 +69,11 @@ export class EmotionController {
 
         this._headFrameInitialized = false;
 
-
-        /*
-         * O tamanho da janela da cabeça é calculado
-         * somente na primeira detecção.
-         */
-
         this._headFrameWidthFactor = 2.8;
 
         this._headFrameHeightFactor = 3.4;
 
-
-        /*
-         * Posição vertical da cabeça.
-         */
-
         this._headFrameVerticalPosition = 0.56;
-
-
-        /*
-         * Suavização do movimento.
-         */
 
         this._headFrameSmoothing = 0.92;
 
@@ -97,52 +82,60 @@ export class EmotionController {
         // ESTABILIZAÇÃO TEMPORAL DAS EMOÇÕES
         // =====================================================
 
-        // Emoção atualmente confirmada.
         this._lastEmotion = null;
 
-
-        // Emoção que está tentando assumir o controle.
         this._candidateEmotion = null;
 
-
-        // Quantidade de frames consecutivos da candidata.
         this._candidateEmotionCount = 0;
 
-
-        // Histórico recente das detecções.
         this._emotionHistory = [];
 
-
-        // Quantidade máxima de detecções guardadas.
         this._emotionHistorySize = 8;
 
 
-        // Confiança mínima para considerar uma emoção.
+        // =====================================================
+        // CONFIGURAÇÃO DAS EMOÇÕES
+        // =====================================================
+
+        /*
+         * A maioria das emoções continua usando 0.35.
+         *
+         * SAD recebe um limite menor porque o modelo
+         * frequentemente atribui uma confiança mais baixa
+         * para tristeza, mesmo quando a expressão está clara.
+         */
+
         this._emotionMinConfidence = 0.35;
 
+        this._emotionMinConfidenceByType = {
 
-        // Número mínimo de frames para confirmar
-        // uma nova emoção.
+            sad: 0.22
+
+        };
+
+
+        /*
+         * Quantidade padrão de detecções para confirmar
+         * uma nova emoção.
+         */
+
         this._emotionRequiredFrames = 4;
+
+
+        /*
+         * SAD pode ser confirmada um pouco mais rapidamente.
+         */
+
+        this._emotionRequiredFramesByType = {
+
+            sad: 3
+
+        };
 
 
         // =====================================================
         // TEMPO MÍNIMO DE PERMANÊNCIA
         // =====================================================
-
-        /*
-         * Depois que uma emoção é confirmada,
-         * ela permanece protegida por este período.
-         *
-         * Exemplo:
-         *
-         * SAD
-         * ↓
-         * permanece SAD
-         * ↓
-         * pequenas oscilações não causam troca
-         *
-         */
 
         this._emotionMinimumDuration = 2200;
 
@@ -151,12 +144,18 @@ export class EmotionController {
         // TEMPO DE TRANSIÇÃO
         // =====================================================
 
+        this._emotionTransitionDuration = 700;
+
+
         /*
-         * Uma nova emoção precisa permanecer consistente
-         * durante este período antes de substituir a atual.
+         * SAD possui transição um pouco mais rápida.
          */
 
-        this._emotionTransitionDuration = 700;
+        this._emotionTransitionDurationByType = {
+
+            sad: 500
+
+        };
 
 
         // Momento em que a emoção atual foi confirmada.
@@ -277,10 +276,6 @@ export class EmotionController {
                     return;
                 }
 
-
-                // =================================================
-                // GUARDA MÁSCARA VÁLIDA
-                // =================================================
 
                 this._segmentationMask =
                     results.segmentationMask;
@@ -423,12 +418,22 @@ export class EmotionController {
         // CONFIGURA DETECTOR FACIAL
         // =====================================================
 
+        /*
+         * 416 aumenta a resolução usada pelo TinyFaceDetector.
+         *
+         * Isso ajuda principalmente quando o rosto ocupa
+         * uma área menor do vídeo.
+         *
+         * O threshold 0.20 também permite que o detector
+         * aceite rostos com score um pouco menor.
+         */
+
         this._faceOptions =
             new faceapi.TinyFaceDetectorOptions({
 
-                inputSize: 320,
+                inputSize: 416,
 
-                scoreThreshold: 0.25
+                scoreThreshold: 0.20
 
             });
 
@@ -714,7 +719,7 @@ export class EmotionController {
 
 
             // =================================================
-            // DETECÇÃO FACIAL COM LANDMARKS E EXPRESSÕES
+            // DETECÇÃO FACIAL
             // =================================================
 
             detection =
@@ -970,10 +975,6 @@ export class EmotionController {
             this._headFrameSmoothing;
 
 
-        // =====================================================
-        // SUAVIZA SOMENTE POSIÇÃO
-        // =====================================================
-
         frame.x =
             frame.x * s +
             targetX * (1 - s);
@@ -983,10 +984,6 @@ export class EmotionController {
             frame.y * s +
             targetY * (1 - s);
 
-
-        // =====================================================
-        // LIMITA À CÂMERA
-        // =====================================================
 
         this._clampHeadFrame();
     }
@@ -1077,6 +1074,87 @@ export class EmotionController {
 
 
     // =========================================================
+    // OBTÉM CONFIGURAÇÃO DA EMOÇÃO
+    // =========================================================
+
+    _getEmotionMinConfidence(
+        emotion
+    ) {
+
+        if (
+            this._emotionMinConfidenceByType &&
+            this._emotionMinConfidenceByType[
+                emotion
+            ] !== undefined
+        ) {
+
+            return (
+                this._emotionMinConfidenceByType[
+                    emotion
+                ]
+            );
+        }
+
+
+        return this._emotionMinConfidence;
+    }
+
+
+    // =========================================================
+    // OBTÉM FRAMES NECESSÁRIOS
+    // =========================================================
+
+    _getEmotionRequiredFrames(
+        emotion
+    ) {
+
+        if (
+            this._emotionRequiredFramesByType &&
+            this._emotionRequiredFramesByType[
+                emotion
+            ] !== undefined
+        ) {
+
+            return (
+                this._emotionRequiredFramesByType[
+                    emotion
+                ]
+            );
+        }
+
+
+        return this._emotionRequiredFrames;
+    }
+
+
+    // =========================================================
+    // OBTÉM TEMPO DE TRANSIÇÃO
+    // =========================================================
+
+    _getEmotionTransitionDuration(
+        emotion
+    ) {
+
+        if (
+            this._emotionTransitionDurationByType &&
+            this._emotionTransitionDurationByType[
+                emotion
+            ] !== undefined
+        ) {
+
+            return (
+                this._emotionTransitionDurationByType[
+                    emotion
+                ]
+            );
+        }
+
+
+        return this._emotionTransitionDuration;
+    }
+
+
+    // =========================================================
     // PROCESSA EMOÇÃO
     // =========================================================
 
@@ -1119,12 +1197,18 @@ export class EmotionController {
 
 
         // =====================================================
-        // CONFIDÊNCIA MÍNIMA
+        // CONFIDÊNCIA MÍNIMA ESPECÍFICA
         // =====================================================
+
+        const minimumConfidence =
+            this._getEmotionMinConfidence(
+                detectedEmotion
+            );
+
 
         if (
             detectedConfidence <
-            this._emotionMinConfidence
+            minimumConfidence
         ) {
 
             return;
@@ -1209,6 +1293,66 @@ export class EmotionController {
 
 
         // =====================================================
+        // REGRA ESPECIAL PARA SAD
+        // =====================================================
+
+        /*
+         * O modelo do face-api frequentemente apresenta
+         * tristeza com confiança relativamente baixa.
+         *
+         * Por isso, se SAD apareceu repetidamente no histórico,
+         * permitimos que ela seja dominante mesmo quando
+         * existe uma diferença pequena para outra emoção.
+         */
+
+        if (
+            counts.sad &&
+            counts.sad >= 2
+        ) {
+
+            const sadItems =
+                this._emotionHistory.filter(
+                    item =>
+                        item.emotion === 'sad'
+                );
+
+
+            const sadAverage =
+                sadItems.length > 0
+                    ? sadItems.reduce(
+                        (
+                            sum,
+                            item
+                        ) =>
+                            sum +
+                            item.confidence,
+                        0
+                    ) /
+                    sadItems.length
+                    : 0;
+
+
+            if (
+                sadAverage >=
+                this._getEmotionMinConfidence(
+                    'sad'
+                )
+            ) {
+
+                if (
+                    counts.sad >=
+                    dominantCount - 1
+                ) {
+
+                    dominantEmotion =
+                        'sad';
+
+                }
+            }
+        }
+
+
+        // =====================================================
         // CONFIANÇA MÉDIA
         // =====================================================
 
@@ -1279,11 +1423,23 @@ export class EmotionController {
                 this._candidateStartTime;
 
 
+            const requiredFrames =
+                this._getEmotionRequiredFrames(
+                    dominantEmotion
+                );
+
+
+            const transitionDuration =
+                this._getEmotionTransitionDuration(
+                    dominantEmotion
+                );
+
+
             if (
                 this._candidateEmotionCount >=
-                    this._emotionRequiredFrames &&
+                    requiredFrames &&
                 candidateDuration >=
-                    this._emotionTransitionDuration
+                    transitionDuration
             ) {
 
                 this._confirmEmotion(
@@ -1306,13 +1462,6 @@ export class EmotionController {
             dominantEmotion ===
             this._lastEmotion
         ) {
-
-            /*
-             * A emoção atual continua válida.
-             *
-             * Pequenas oscilações do reconhecimento
-             * não provocam mudança.
-             */
 
             this._candidateEmotion =
                 null;
@@ -1338,11 +1487,6 @@ export class EmotionController {
             this._candidateEmotion !==
             dominantEmotion
         ) {
-
-            /*
-             * Começa uma nova tentativa
-             * de transição.
-             */
 
             this._candidateEmotion =
                 dominantEmotion;
@@ -1391,12 +1535,28 @@ export class EmotionController {
 
 
         // =====================================================
+        // CONFIGURAÇÃO ESPECÍFICA
+        // =====================================================
+
+        const requiredFrames =
+            this._getEmotionRequiredFrames(
+                dominantEmotion
+            );
+
+
+        const transitionDuration =
+            this._getEmotionTransitionDuration(
+                dominantEmotion
+            );
+
+
+        // =====================================================
         // TEMPO DE TRANSIÇÃO
         // =====================================================
 
         if (
             candidateDuration <
-            this._emotionTransitionDuration
+            transitionDuration
         ) {
 
             return;
@@ -1409,7 +1569,7 @@ export class EmotionController {
 
         if (
             this._candidateEmotionCount <
-            this._emotionRequiredFrames
+            requiredFrames
         ) {
 
             return;
@@ -2109,3 +2269,4 @@ export class EmotionController {
         );
     }
 }
+
