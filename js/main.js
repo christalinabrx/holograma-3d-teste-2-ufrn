@@ -1,4 +1,4 @@
-```javascript
+
 const CONFIG = {
     MODELS: 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'
 };
@@ -1474,4 +1474,4 @@ document
 
 window.onload =
     init;
-```
+
