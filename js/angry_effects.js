@@ -3,17 +3,18 @@
 // Sistema procedural de efeitos visuais para a emoção ANGRY
 //
 // Conceito:
-// - cabeça em combustão
-// - halo vibrante
-// - raios de energia
+// - tensão
+// - halo vermelho intenso
 // - glitch da própria imagem segmentada
-// - fragmentação digital
-// - partículas / fagulhas
-// - explosões
+// - fragmentação da cabeça
+// - partículas explosivas
+// - partículas flutuantes
+// - raios de energia
+// - picos de raiva
 //
 // IMPORTANTE:
 // Este módulo NÃO detecta emoções.
-// Ele apenas recebe emoção + confiança.
+// Ele apenas recebe uma emoção + confiança.
 //
 // Compatível com:
 // - detecção normal
@@ -30,15 +31,24 @@ export class AngryEffects {
         // ESTADO
         // =====================================================
 
-        this.emotion = 'neutral';
+        this.emotion =
+            'neutral';
 
-        this.confidence = 0;
 
-        this.intensity = 0;
+        this.confidence =
+            0;
 
-        this.targetIntensity = 0;
 
-        this.time = performance.now();
+        this.intensity =
+            0;
+
+
+        this.targetIntensity =
+            0;
+
+
+        this.time =
+            performance.now();
 
 
         // =====================================================
@@ -47,8 +57,10 @@ export class AngryEffects {
 
         this.config = {
 
-            // Movimento lento.
-            // O efeito não fica piscando.
+            // -------------------------------------------------
+            // Movimento muito mais lento.
+            // O efeito não fica "piscando".
+            // -------------------------------------------------
 
             pulseSpeed:
                 0.0018,
@@ -59,15 +71,15 @@ export class AngryEffects {
             // -------------------------------------------------
 
             maxGlow:
-                0.72,
+                0.88,
 
 
             // -------------------------------------------------
-            // FRAGMENTOS
+            // FRAGMENTOS GEOMÉTRICOS
             // -------------------------------------------------
 
             maxFragments:
-                34,
+                28,
 
 
             // -------------------------------------------------
@@ -75,28 +87,33 @@ export class AngryEffects {
             // -------------------------------------------------
 
             maxParticles:
-                150,
+                110,
 
 
             // -------------------------------------------------
-            // GLITCH
+            // GLITCH DA IMAGEM
             // -------------------------------------------------
 
             glitchIntervalMin:
-                550,
+                500,
 
             glitchIntervalMax:
-                1400,
+                1300,
+
 
             glitchDuration:
-                85,
+                90,
+
+
+            // Quantidade de pedaços reais da imagem
+            // deslocados durante o glitch.
 
             maxImageGlitches:
-                26,
+                22,
 
 
             // -------------------------------------------------
-            // PICOS
+            // PICOS DE RAIVA
             // -------------------------------------------------
 
             peakIntervalMin:
@@ -107,11 +124,11 @@ export class AngryEffects {
 
 
             // -------------------------------------------------
-            // EMISSÃO DE PARTÍCULAS
+            // PARTÍCULAS CONTÍNUAS
             // -------------------------------------------------
 
             particleEmissionRate:
-                0.09,
+                0.075,
 
 
             // -------------------------------------------------
@@ -128,7 +145,9 @@ export class AngryEffects {
         // GLITCH
         // =====================================================
 
-        this.glitchTimer = 0;
+        this.glitchTimer =
+            0;
+
 
         this.nextGlitch =
             this._random(
@@ -136,16 +155,26 @@ export class AngryEffects {
                 this.config.glitchIntervalMax
             );
 
-        this.glitchRemaining = 0;
 
-        this.imageGlitches = [];
+        this.glitchRemaining =
+            0;
 
 
         // =====================================================
-        // PICOS
+        // GLITCH DA IMAGEM
         // =====================================================
 
-        this.peakTimer = 0;
+        this.imageGlitches =
+            [];
+
+
+        // =====================================================
+        // PICO
+        // =====================================================
+
+        this.peakTimer =
+            0;
+
 
         this.nextPeak =
             this._random(
@@ -153,41 +182,40 @@ export class AngryEffects {
                 this.config.peakIntervalMax
             );
 
-        this.peakIntensity = 0;
+
+        this.peakIntensity =
+            0;
 
 
         // =====================================================
         // FRAGMENTOS
         // =====================================================
 
-        this.fragments = [];
+        this.fragments =
+            [];
 
 
         // =====================================================
         // PARTÍCULAS
         // =====================================================
 
-        this.particles = [];
+        this.particles =
+            [];
 
-        this.particleEmissionAccumulator = 0;
 
-
-        // =====================================================
-        // VIBRAÇÃO DO HALO
-        // =====================================================
-
-        this.haloShakeX = 0;
-
-        this.haloShakeY = 0;
-
-        this.haloShakeRadius = 0;
+        this.particleEmissionAccumulator =
+            0;
 
 
         // =====================================================
-        // PEQUENO BRILHO DE IMPACTO
+        // FLASH
+        //
+        // Mantido apenas para pequenos acentos.
+        // Não existe mais flash de tela.
         // =====================================================
 
-        this.flash = 0;
+        this.flash =
+            0;
 
     }
 
@@ -207,7 +235,6 @@ export class AngryEffects {
 
         this.confidence =
             Number.isFinite(confidence)
-
                 ? Math.max(
                     0,
                     Math.min(
@@ -215,9 +242,12 @@ export class AngryEffects {
                         confidence
                     )
                 )
-
                 : 0;
 
+
+        // =====================================================
+        // ANGRY
+        // =====================================================
 
         if (
             this.emotion === 'angry'
@@ -238,7 +268,8 @@ export class AngryEffects {
 
         } else {
 
-            this.targetIntensity = 0;
+            this.targetIntensity =
+                0;
 
         }
 
@@ -290,47 +321,8 @@ export class AngryEffects {
         // TEMPO
         // =====================================================
 
-        this.time += dt;
-
-
-        // =====================================================
-        // VIBRAÇÃO DO HALO
-        // =====================================================
-
-        const vibration =
-            this.intensity *
-            (
-                0.45 +
-                this.peakIntensity *
-                0.35
-            );
-
-
-        this.haloShakeX =
-            Math.sin(
-                this.time *
-                0.018
-            ) *
-            vibration *
-            2.5;
-
-
-        this.haloShakeY =
-            Math.cos(
-                this.time *
-                0.0157
-            ) *
-            vibration *
-            2.0;
-
-
-        this.haloShakeRadius =
-            Math.sin(
-                this.time *
-                0.012
-            ) *
-            vibration *
-            4;
+        this.time +=
+            dt;
 
 
         // =====================================================
@@ -342,7 +334,8 @@ export class AngryEffects {
             0.08
         ) {
 
-            this.glitchTimer += dt;
+            this.glitchTimer +=
+                dt;
 
 
             if (
@@ -355,11 +348,12 @@ export class AngryEffects {
                     (
                         0.85 +
                         this.intensity *
-                        0.40
+                        0.45
                     );
 
 
-                this.glitchTimer = 0;
+                this.glitchTimer =
+                    0;
 
 
                 this.nextGlitch =
@@ -368,11 +362,15 @@ export class AngryEffects {
                         this.config.glitchIntervalMax
                     ) *
                     (
-                        1.15 -
+                        1.18 -
                         this.intensity *
-                        0.22
+                        0.25
                     );
 
+
+                // -------------------------------------------------
+                // Cria os pedaços reais da imagem
+                // -------------------------------------------------
 
                 this._spawnImageGlitches();
 
@@ -380,15 +378,18 @@ export class AngryEffects {
 
         } else {
 
-            this.glitchTimer = 0;
+            this.glitchTimer =
+                0;
 
-            this.glitchRemaining = 0;
+
+            this.glitchRemaining =
+                0;
 
         }
 
 
         // =====================================================
-        // DURAÇÃO DO GLITCH
+        // DECAY DO GLITCH
         // =====================================================
 
         if (
@@ -396,7 +397,8 @@ export class AngryEffects {
             0
         ) {
 
-            this.glitchRemaining -= dt;
+            this.glitchRemaining -=
+                dt;
 
 
             if (
@@ -404,7 +406,8 @@ export class AngryEffects {
                 0
             ) {
 
-                this.glitchRemaining = 0;
+                this.glitchRemaining =
+                    0;
 
             }
 
@@ -412,7 +415,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // PICOS DE RAIVA
+        // PICO DE RAIVA
         // =====================================================
 
         if (
@@ -420,7 +423,8 @@ export class AngryEffects {
             0.18
         ) {
 
-            this.peakTimer += dt;
+            this.peakTimer +=
+                dt;
 
 
             if (
@@ -428,7 +432,8 @@ export class AngryEffects {
                 this.nextPeak
             ) {
 
-                this.peakTimer = 0;
+                this.peakTimer =
+                    0;
 
 
                 this.peakIntensity =
@@ -437,13 +442,13 @@ export class AngryEffects {
                     0.40;
 
 
-                // Muito discreto.
-                // Não pisca a tela.
+                // Flash extremamente discreto.
+                // Não é mais usado como flash da tela.
 
                 this.flash =
-                    0.04 +
+                    0.05 +
                     Math.random() *
-                    0.07;
+                    0.08;
 
 
                 this._spawnPeakFragments();
@@ -468,7 +473,8 @@ export class AngryEffects {
 
         } else {
 
-            this.peakTimer = 0;
+            this.peakTimer =
+                0;
 
         }
 
@@ -485,7 +491,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // DECAY DO BRILHO
+        // DECAY DO PEQUENO FLASH
         // =====================================================
 
         this.flash *=
@@ -496,7 +502,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // EMISSÃO CONTÍNUA DE FAGULHAS
+        // EMISSÃO CONTÍNUA DE PARTÍCULAS
         // =====================================================
 
         if (
@@ -508,7 +514,7 @@ export class AngryEffects {
                 dt *
                 this.config.particleEmissionRate *
                 (
-                    0.55 +
+                    0.45 +
                     this.intensity *
                     1.8
                 );
@@ -519,7 +525,9 @@ export class AngryEffects {
                 1
             ) {
 
-                this.particleEmissionAccumulator -= 1;
+                this.particleEmissionAccumulator -=
+                    1;
+
 
                 this._spawnFloatingParticle();
 
@@ -527,13 +535,14 @@ export class AngryEffects {
 
         } else {
 
-            this.particleEmissionAccumulator = 0;
+            this.particleEmissionAccumulator =
+                0;
 
         }
 
 
         // =====================================================
-        // ATUALIZA GLITCHES
+        // ATUALIZA GLITCHES DA IMAGEM
         // =====================================================
 
         for (
@@ -549,7 +558,8 @@ export class AngryEffects {
                 this.imageGlitches[i];
 
 
-            glitch.life -= dt;
+            glitch.life -=
+                dt;
 
 
             glitch.x +=
@@ -559,6 +569,11 @@ export class AngryEffects {
 
             glitch.y +=
                 glitch.vy *
+                dt;
+
+
+            glitch.rotation +=
+                glitch.rotationSpeed *
                 dt;
 
 
@@ -574,11 +589,6 @@ export class AngryEffects {
                     0.992,
                     dt
                 );
-
-
-            glitch.rotation +=
-                glitch.rotationSpeed *
-                dt;
 
 
             if (
@@ -613,7 +623,8 @@ export class AngryEffects {
                 this.fragments[i];
 
 
-            fragment.life -= dt;
+            fragment.life -=
+                dt;
 
 
             fragment.x +=
@@ -677,7 +688,8 @@ export class AngryEffects {
                 this.particles[i];
 
 
-            particle.life -= dt;
+            particle.life -=
+                dt;
 
 
             particle.x +=
@@ -689,6 +701,9 @@ export class AngryEffects {
                 particle.vy *
                 dt;
 
+
+            // Pequena turbulência.
+            // Faz as partículas parecerem flutuantes.
 
             particle.vx +=
                 Math.sin(
@@ -751,15 +766,24 @@ export class AngryEffects {
             0
         ) {
 
-            this.fragments.length = 0;
+            this.fragments.length =
+                0;
 
-            this.particles.length = 0;
 
-            this.imageGlitches.length = 0;
+            this.particles.length =
+                0;
 
-            this.peakIntensity = 0;
 
-            this.flash = 0;
+            this.imageGlitches.length =
+                0;
+
+
+            this.peakIntensity =
+                0;
+
+
+            this.flash =
+                0;
 
         }
 
@@ -820,21 +844,21 @@ export class AngryEffects {
         }
 
 
-        // =====================================================
-        // CENTRO
-        // =====================================================
-
         const cx =
             drawX +
-            drawWidth / 2 +
-            this.haloShakeX;
+            drawWidth /
+            2;
 
 
         const cy =
             drawY +
-            drawHeight * 0.45 +
-            this.haloShakeY;
+            drawHeight *
+            0.45;
 
+
+        // =====================================================
+        // PULSAÇÃO MUITO SUAVE
+        // =====================================================
 
         const pulse =
             (
@@ -843,15 +867,16 @@ export class AngryEffects {
                     this.config.pulseSpeed
                 ) +
                 1
-            ) / 2;
+            ) /
+            2;
 
 
         const tension =
             this.intensity *
             (
-                0.90 +
+                0.88 +
                 pulse *
-                0.10
+                0.12
             );
 
 
@@ -864,70 +889,240 @@ export class AngryEffects {
 
 
         // =====================================================
-        // HALO
+        // COMPOSIÇÃO
         // =====================================================
 
-        this._drawContainedHalo(
+        ctx.globalCompositeOperation =
+            'screen';
 
-            ctx,
 
-            drawX,
-            drawY,
-            drawWidth,
-            drawHeight,
+        // =====================================================
+        // HALO EXTERNO
+        // =====================================================
 
-            cx,
-            cy,
+        const minSize =
+            Math.min(
+                drawWidth,
+                drawHeight
+            );
 
-            tension,
-            peak
 
+        const glowRadius =
+            minSize *
+            (
+                0.40 +
+                tension *
+                0.18
+            );
+
+
+        const gradient =
+            ctx.createRadialGradient(
+
+                cx,
+
+                cy,
+
+                glowRadius *
+                0.08,
+
+                cx,
+
+                cy,
+
+                glowRadius
+
+            );
+
+
+        gradient.addColorStop(
+            0,
+            `rgba(255, 15, 15, ${
+                Math.min(
+                    0.55,
+                    0.16 +
+                    tension *
+                    0.26
+                )
+            })`
+        );
+
+
+        gradient.addColorStop(
+            0.32,
+            `rgba(245, 0, 0, ${
+                Math.min(
+                    0.40,
+                    0.12 +
+                    tension *
+                    0.18
+                )
+            })`
+        );
+
+
+        gradient.addColorStop(
+            0.68,
+            `rgba(170, 0, 0, ${
+                Math.min(
+                    this.config.maxGlow,
+                    0.10 +
+                    tension *
+                    0.18
+                )
+            })`
+        );
+
+
+        gradient.addColorStop(
+            1,
+            'rgba(100, 0, 0, 0)'
+        );
+
+
+        ctx.fillStyle =
+            gradient;
+
+
+        ctx.fillRect(
+            drawX -
+            glowRadius,
+
+            drawY -
+            glowRadius,
+
+            drawWidth +
+            glowRadius *
+            2,
+
+            drawHeight +
+            glowRadius *
+            2
         );
 
 
         // =====================================================
-        // EFEITO DE CHAMA SOBRE A PESSOA
+        // SEGUNDO HALO MAIS PRÓXIMO DA CABEÇA
+        // =====================================================
+
+        const innerRadius =
+            minSize *
+            (
+                0.25 +
+                tension *
+                0.12
+            );
+
+
+        const innerGradient =
+            ctx.createRadialGradient(
+
+                cx,
+
+                cy,
+
+                innerRadius *
+                0.05,
+
+                cx,
+
+                cy,
+
+                innerRadius
+
+            );
+
+
+        innerGradient.addColorStop(
+            0,
+            `rgba(255, 35, 35, ${
+                0.10 +
+                tension *
+                0.15
+            })`
+        );
+
+
+        innerGradient.addColorStop(
+            0.5,
+            `rgba(255, 0, 0, ${
+                0.06 +
+                tension *
+                0.10
+            })`
+        );
+
+
+        innerGradient.addColorStop(
+            1,
+            'rgba(120, 0, 0, 0)'
+        );
+
+
+        ctx.fillStyle =
+            innerGradient;
+
+
+        ctx.fillRect(
+            drawX,
+            drawY,
+            drawWidth,
+            drawHeight
+        );
+
+
+        // =====================================================
+        // PEQUENO ACENTO DE LUZ
+        //
+        // Não é mais um flash de tela.
+        // =====================================================
+
+        if (
+            this.flash >
+            0.01
+        ) {
+
+            ctx.save();
+
+
+            ctx.globalAlpha =
+                this.flash *
+                this.intensity;
+
+
+            ctx.fillStyle =
+                '#ff3030';
+
+
+            ctx.beginPath();
+
+
+            ctx.arc(
+                cx,
+                cy,
+                minSize *
+                0.025,
+                0,
+                Math.PI * 2
+            );
+
+
+            ctx.fill();
+
+
+            ctx.restore();
+
+        }
+
+
+        // =====================================================
+        // GLITCH REAL DA IMAGEM
         // =====================================================
 
         if (
             personCanvas &&
             sourceWidth > 0 &&
             sourceHeight > 0
-        ) {
-
-            this._drawFlameOverlay(
-
-                ctx,
-
-                personCanvas,
-
-                sourceX,
-                sourceY,
-                sourceWidth,
-                sourceHeight,
-
-                drawX,
-                drawY,
-                drawWidth,
-                drawHeight,
-
-                tension,
-                peak
-
-            );
-
-        }
-
-
-        // =====================================================
-        // GLITCH DA IMAGEM REAL
-        // =====================================================
-
-        if (
-            personCanvas &&
-            sourceWidth > 0 &&
-            sourceHeight > 0 &&
-            this.glitchRemaining > 0
         ) {
 
             this._drawImageGlitches(
@@ -937,13 +1132,19 @@ export class AngryEffects {
                 personCanvas,
 
                 sourceX,
+
                 sourceY,
+
                 sourceWidth,
+
                 sourceHeight,
 
                 drawX,
+
                 drawY,
+
                 drawWidth,
+
                 drawHeight,
 
                 tension
@@ -954,7 +1155,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // FRAGMENTOS
+        // FRAGMENTOS GEOMÉTRICOS
         // =====================================================
 
         this._drawFragments(
@@ -966,7 +1167,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // FAGULHAS
+        // PARTÍCULAS
         // =====================================================
 
         this._drawParticles(
@@ -978,22 +1179,17 @@ export class AngryEffects {
 
 
         // =====================================================
-        // RAIOS
+        // RAIOS DE ENERGIA
         // =====================================================
 
         this._drawEnergyCracks(
-
             ctx,
-
             cx,
             cy,
-
             drawWidth,
             drawHeight,
-
             tension,
             peak
-
         );
 
 
@@ -1003,486 +1199,12 @@ export class AngryEffects {
 
 
     // =========================================================
-    // HALO CONTIDO NO VÍDEO
-    // =========================================================
-
-    _drawContainedHalo(
-        ctx,
-        x,
-        y,
-        width,
-        height,
-        cx,
-        cy,
-        intensity,
-        peak
-    ) {
-
-        // -----------------------------------------------------
-        // Descobre quanto espaço existe até cada borda.
-        // -----------------------------------------------------
-
-        const left =
-            cx - x;
-
-        const right =
-            x +
-            width -
-            cx;
-
-        const top =
-            cy - y;
-
-        const bottom =
-            y +
-            height -
-            cy;
-
-
-        // O halo nunca pode ultrapassar o canvas.
-
-        const maxRadius =
-            Math.max(
-                20,
-                Math.min(
-                    left,
-                    right,
-                    top,
-                    bottom
-                )
-            );
-
-
-        const radius =
-            Math.min(
-                maxRadius *
-                0.92,
-
-                Math.min(
-                    width,
-                    height
-                ) *
-                (
-                    0.34 +
-                    intensity *
-                    0.16
-                ) +
-                this.haloShakeRadius
-            );
-
-
-        // -----------------------------------------------------
-        // HALO PRINCIPAL
-        // -----------------------------------------------------
-
-        const gradient =
-            ctx.createRadialGradient(
-
-                cx,
-                cy,
-
-                radius * 0.03,
-
-                cx,
-                cy,
-
-                radius
-
-            );
-
-
-        gradient.addColorStop(
-
-            0,
-
-            `rgba(255, 55, 20, ${
-                0.14 +
-                intensity *
-                0.18
-            })`
-
-        );
-
-
-        gradient.addColorStop(
-
-            0.28,
-
-            `rgba(255, 35, 10, ${
-                0.10 +
-                intensity *
-                0.16
-            })`
-
-        );
-
-
-        gradient.addColorStop(
-
-            0.58,
-
-            `rgba(235, 15, 5, ${
-                0.06 +
-                intensity *
-                0.11
-            })`
-
-        );
-
-
-        gradient.addColorStop(
-
-            0.82,
-
-            `rgba(170, 5, 0, ${
-                0.035 +
-                intensity *
-                0.055
-            })`
-
-        );
-
-
-        gradient.addColorStop(
-
-            1,
-
-            'rgba(80, 0, 0, 0)'
-
-        );
-
-
-        ctx.fillStyle =
-            gradient;
-
-
-        // IMPORTANTE:
-        // o retângulo permanece dentro do canvas.
-
-        ctx.fillRect(
-            x,
-            y,
-            width,
-            height
-        );
-
-
-        // -----------------------------------------------------
-        // PEQUENO NÚCLEO INCANDESCENTE
-        // -----------------------------------------------------
-
-        const coreRadius =
-            radius *
-            (
-                0.18 +
-                intensity *
-                0.05
-            );
-
-
-        const core =
-            ctx.createRadialGradient(
-
-                cx,
-                cy,
-
-                0,
-
-                cx,
-                cy,
-
-                coreRadius
-
-            );
-
-
-        core.addColorStop(
-            0,
-            `rgba(255, 190, 70, ${
-                0.05 +
-                intensity *
-                0.10
-            })`
-        );
-
-
-        core.addColorStop(
-            0.45,
-            `rgba(255, 70, 20, ${
-                0.05 +
-                intensity *
-                0.08
-            })`
-        );
-
-
-        core.addColorStop(
-            1,
-            'rgba(255, 20, 0, 0)'
-        );
-
-
-        ctx.fillStyle =
-            core;
-
-
-        ctx.fillRect(
-            x,
-            y,
-            width,
-            height
-        );
-
-    }
-
-
-    // =========================================================
-    // GRADIENTE DE CHAMA SOBRE A PESSOA
-    // =========================================================
-
-    _drawFlameOverlay(
-        ctx,
-        personCanvas,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        drawX,
-        drawY,
-        drawWidth,
-        drawHeight,
-        intensity,
-        peak
-    ) {
-
-        ctx.save();
-
-
-        // -----------------------------------------------------
-        // O gradient é desenhado sobre a imagem já existente.
-        //
-        // "source-atop" faz com que ele permaneça somente
-        // onde já existe a pessoa.
-        // -----------------------------------------------------
-
-        ctx.globalCompositeOperation =
-            'source-atop';
-
-
-        const gradient =
-            ctx.createLinearGradient(
-
-                drawX,
-                drawY +
-                drawHeight,
-
-                drawX +
-                drawWidth *
-                0.15,
-
-                drawY
-
-            );
-
-
-        // Base mais escura.
-
-        gradient.addColorStop(
-
-            0,
-
-            `rgba(120, 5, 0, ${
-                0.12 +
-                intensity *
-                0.16
-            })`
-
-        );
-
-
-        // Vermelho.
-
-        gradient.addColorStop(
-
-            0.30,
-
-            `rgba(225, 15, 0, ${
-                0.12 +
-                intensity *
-                0.18
-            })`
-
-        );
-
-
-        // Laranja.
-
-        gradient.addColorStop(
-
-            0.58,
-
-            `rgba(255, 80, 5, ${
-                0.10 +
-                intensity *
-                0.18
-            })`
-
-        );
-
-
-        // Amarelo incandescente.
-
-        gradient.addColorStop(
-
-            0.78,
-
-            `rgba(255, 170, 25, ${
-                0.06 +
-                intensity *
-                0.13
-            })`
-
-        );
-
-
-        // Ponta quente.
-
-        gradient.addColorStop(
-
-            1,
-
-            `rgba(255, 215, 80, ${
-                0.035 +
-                intensity *
-                0.08
-            })`
-
-        );
-
-
-        ctx.fillStyle =
-            gradient;
-
-
-        ctx.fillRect(
-
-            drawX,
-            drawY,
-            drawWidth,
-            drawHeight
-
-        );
-
-
-        // -----------------------------------------------------
-        // MANCHAS DE CALOR
-        // -----------------------------------------------------
-
-        ctx.globalCompositeOperation =
-            'source-atop';
-
-
-        const heatX =
-            drawX +
-            drawWidth *
-            (
-                0.35 +
-                Math.sin(
-                    this.time *
-                    0.001
-                ) *
-                0.06
-            );
-
-
-        const heatY =
-            drawY +
-            drawHeight *
-            0.27;
-
-
-        const heatRadius =
-            Math.min(
-                drawWidth,
-                drawHeight
-            ) *
-            (
-                0.18 +
-                intensity *
-                0.05
-            );
-
-
-        const heat =
-            ctx.createRadialGradient(
-
-                heatX,
-                heatY,
-
-                0,
-
-                heatX,
-                heatY,
-
-                heatRadius
-
-            );
-
-
-        heat.addColorStop(
-            0,
-            `rgba(255, 215, 70, ${
-                0.05 +
-                intensity *
-                0.10
-            })`
-        );
-
-
-        heat.addColorStop(
-            0.45,
-            `rgba(255, 100, 10, ${
-                0.04 +
-                intensity *
-                0.08
-            })`
-        );
-
-
-        heat.addColorStop(
-            1,
-            'rgba(255, 0, 0, 0)'
-        );
-
-
-        ctx.fillStyle =
-            heat;
-
-
-        ctx.fillRect(
-
-            drawX,
-            drawY,
-            drawWidth,
-            drawHeight
-
-        );
-
-
-        ctx.restore();
-
-    }
-
-
-    // =========================================================
-    // GLITCH DA PRÓPRIA IMAGEM
+    // GLITCH DA PRÓPRIA IMAGEM SEGMENTADA
     //
-    // ATENÇÃO:
-    // Não desenha linhas.
-    // Não desenha barras.
-    // Não desenha retângulos coloridos.
+    // Não existem barras.
     //
-    // Todos os pixels vêm do personCanvas.
+    // Pequenos pedaços reais da imagem da cabeça são
+    // deslocados radialmente para fora.
     // =========================================================
 
     _drawImageGlitches(
@@ -1557,44 +1279,46 @@ export class AngryEffects {
             }
 
 
+            // ---------------------------------------------
+            // Coordenada da origem dentro da cabeça
+            // ---------------------------------------------
+
             const sx =
                 sourceX +
-                glitch.x *
-                sourceWidth;
+                glitch.x;
 
 
             const sy =
                 sourceY +
-                glitch.y *
-                sourceHeight;
+                glitch.y;
 
 
             const sw =
-                Math.max(
-                    2,
-                    glitch.width *
-                    sourceWidth
-                );
+                glitch.width;
 
 
             const sh =
-                Math.max(
-                    2,
-                    glitch.height *
-                    sourceHeight
-                );
+                glitch.height;
 
+
+            // ---------------------------------------------
+            // Converte para o espaço do holograma
+            // ---------------------------------------------
 
             const baseX =
                 drawX +
-                glitch.x *
-                drawWidth;
+                (
+                    glitch.x *
+                    scaleX
+                );
 
 
             const baseY =
                 drawY +
-                glitch.y *
-                drawHeight;
+                (
+                    glitch.y *
+                    scaleY
+                );
 
 
             const dw =
@@ -1607,16 +1331,20 @@ export class AngryEffects {
                 scaleY;
 
 
+            // ---------------------------------------------
+            // Deslocamento radial
+            // ---------------------------------------------
+
             const destX =
                 baseX +
                 glitch.offsetX *
-                drawWidth;
+                scaleX;
 
 
             const destY =
                 baseY +
                 glitch.offsetY *
-                drawHeight;
+                scaleY;
 
 
             ctx.save();
@@ -1626,10 +1354,7 @@ export class AngryEffects {
                 alpha;
 
 
-            // -------------------------------------------------
-            // IMPORTANTE:
-            // sourceRect é sempre um pedaço da pessoa.
-            // -------------------------------------------------
+            // Pequena rotação em alguns fragmentos.
 
             if (
                 Math.abs(
@@ -1639,13 +1364,11 @@ export class AngryEffects {
             ) {
 
                 ctx.translate(
-
                     destX +
                     dw / 2,
 
                     destY +
                     dh / 2
-
                 );
 
 
@@ -1743,13 +1466,10 @@ export class AngryEffects {
 
 
             ctx.translate(
-
                 drawX +
                 fragment.x,
-
                 drawY +
                 fragment.y
-
             );
 
 
@@ -1766,21 +1486,13 @@ export class AngryEffects {
                 fragment.color;
 
 
-            ctx.shadowBlur =
-                fragment.glow
-                    ? 5
-                    : 0;
-
-
-            ctx.shadowColor =
-                fragment.color;
-
-
             ctx.fillRect(
 
-                -fragment.width / 2,
+                -fragment.width /
+                2,
 
-                -fragment.height / 2,
+                -fragment.height /
+                2,
 
                 fragment.width,
 
@@ -1797,7 +1509,7 @@ export class AngryEffects {
 
 
     // =========================================================
-    // PARTÍCULAS / FAGULHAS
+    // PARTÍCULAS
     // =========================================================
 
     _drawParticles(
@@ -1851,9 +1563,6 @@ export class AngryEffects {
             }
 
 
-            ctx.save();
-
-
             ctx.globalAlpha =
                 alpha;
 
@@ -1862,56 +1571,41 @@ export class AngryEffects {
                 particle.color;
 
 
+            // Partículas maiores possuem uma pequena
+            // aura própria.
+
             if (
                 particle.glow
             ) {
+
+                ctx.save();
+
 
                 ctx.shadowBlur =
                     particle.size *
                     4;
 
+
                 ctx.shadowColor =
                     particle.color;
 
-            }
 
-
-            // -------------------------------------------------
-            // Fagulha alongada
-            // -------------------------------------------------
-
-            if (
-                particle.spark
-            ) {
-
-                ctx.translate(
+                ctx.fillRect(
 
                     drawX +
                     particle.x,
 
                     drawY +
-                    particle.y
+                    particle.y,
+
+                    particle.size,
+
+                    particle.size
 
                 );
 
 
-                ctx.rotate(
-                    particle.angle
-                );
-
-
-                ctx.fillRect(
-
-                    0,
-                    0,
-
-                    particle.size *
-                    2.4,
-
-                    particle.size *
-                    0.65
-
-                );
+                ctx.restore();
 
             } else {
 
@@ -1931,19 +1625,20 @@ export class AngryEffects {
 
             }
 
-
-            ctx.restore();
-
         }
 
 
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha =
+            1;
 
     }
 
 
     // =========================================================
-    // RAIOS
+    // RAIOS / ENERGIA
+    //
+    // São raios radiais, não barras de glitch.
+    // Movimento contínuo e suave.
     // =========================================================
 
     _drawEnergyCracks(
@@ -1981,10 +1676,6 @@ export class AngryEffects {
             'round';
 
 
-        ctx.lineJoin =
-            'round';
-
-
         for (
             let i = 0;
 
@@ -2004,15 +1695,12 @@ export class AngryEffects {
 
             const movement =
                 Math.sin(
-
                     this.time *
-                    0.0009 +
-
+                    0.0008 +
                     i *
                     1.73
-
                 ) *
-                0.045;
+                0.035;
 
 
             const angle =
@@ -2020,10 +1708,14 @@ export class AngryEffects {
                 movement;
 
 
+            // -------------------------------------------------
+            // Começa perto da cabeça
+            // -------------------------------------------------
+
             const startRadius =
                 minSize *
                 (
-                    0.23 +
+                    0.25 +
                     Math.sin(
                         i *
                         4.13
@@ -2032,12 +1724,16 @@ export class AngryEffects {
                 );
 
 
+            // -------------------------------------------------
+            // Raios mais longos
+            // -------------------------------------------------
+
             const length =
                 minSize *
                 (
-                    0.075 +
+                    0.07 +
                     intensity *
-                    0.15 +
+                    0.14 +
                     peak *
                     0.09
                 );
@@ -2068,62 +1764,26 @@ export class AngryEffects {
 
 
             const alpha =
-                0.18 +
+                0.16 +
                 intensity *
                 0.30 +
                 peak *
                 0.18;
 
 
-            // -------------------------------------------------
-            // Mistura vermelho, laranja e amarelo.
-            // -------------------------------------------------
-
-            const rayColor =
-                i % 5 === 0
-
-                    ? `rgba(255, 180, 45, ${
-                        Math.min(
-                            0.82,
-                            alpha
-                        )
-                    })`
-
-                    : i % 3 === 0
-
-                        ? `rgba(255, 85, 20, ${
-                            Math.min(
-                                0.78,
-                                alpha
-                            )
-                        })`
-
-                        : `rgba(255, 35, 45, ${
-                            Math.min(
-                                0.78,
-                                alpha
-                            )
-                        })`;
-
-
             ctx.strokeStyle =
-                rayColor;
+                `rgba(255, 35, 35, ${
+                    Math.min(
+                        0.75,
+                        alpha
+                    )
+                })`;
 
 
             ctx.lineWidth =
-                1.3 +
+                1.2 +
                 intensity *
-                2.0;
-
-
-            ctx.shadowBlur =
-                3 +
-                intensity *
-                5;
-
-
-            ctx.shadowColor =
-                rayColor;
+                2.2;
 
 
             ctx.beginPath();
@@ -2135,21 +1795,24 @@ export class AngryEffects {
             );
 
 
+            // -------------------------------------------------
+            // Pequeno zigue-zague orgânico
+            // -------------------------------------------------
+
             const middleRadius =
                 length *
-                0.50;
+                0.52;
 
 
             const middleAngle =
                 angle +
-
                 Math.sin(
                     i *
                     2.71 +
                     this.time *
-                    0.00055
+                    0.0005
                 ) *
-                0.09;
+                0.08;
 
 
             const mx =
@@ -2202,15 +1865,15 @@ export class AngryEffects {
             strong
 
                 ? Math.floor(
-                    12 +
+                    10 +
                     this.intensity *
-                    14
+                    12
                 )
 
                 : Math.floor(
                     5 +
                     this.intensity *
-                    10
+                    9
                 );
 
 
@@ -2233,48 +1896,62 @@ export class AngryEffects {
 
 
             // -------------------------------------------------
-            // Coordenadas normalizadas.
+            // A região é expressa em percentual aproximado
+            // da janela da cabeça.
+            //
+            // Isso mantém o efeito funcionando em diferentes
+            // resoluções.
             // -------------------------------------------------
 
+            const pseudoSourceWidth =
+                120;
+
+
+            const pseudoSourceHeight =
+                180;
+
+
             const x =
-                Math.random();
+                Math.random() *
+                pseudoSourceWidth;
 
 
             const y =
-                Math.random();
+                Math.random() *
+                pseudoSourceHeight;
 
-
-            // Fragmentos pequenos e irregulares.
 
             const width =
-                0.025 +
+                5 +
                 Math.random() *
                 (
                     strong
-                        ? 0.16
-                        : 0.11
+                        ? 28
+                        : 22
                 );
 
 
             const height =
-                0.025 +
+                5 +
                 Math.random() *
                 (
                     strong
-                        ? 0.15
-                        : 0.10
+                        ? 30
+                        : 24
                 );
 
 
             // -------------------------------------------------
-            // Centro da cabeça.
+            // Direção radial
             // -------------------------------------------------
 
             const centerX =
-                0.50;
+                pseudoSourceWidth /
+                2;
 
 
             const centerY =
+                pseudoSourceHeight *
                 0.45;
 
 
@@ -2308,61 +1985,78 @@ export class AngryEffects {
                 distance;
 
 
-            // -------------------------------------------------
-            // Quanto mais intenso, mais longe o pedaço voa.
-            // -------------------------------------------------
-
             const outward =
                 (
-                    0.025 +
+                    8 +
                     Math.random() *
                     (
                         strong
-                            ? 0.18
-                            : 0.12
+                            ? 45
+                            : 30
                     )
                 ) *
                 (
-                    0.65 +
+                    0.55 +
                     this.intensity *
-                    0.75
+                    0.65
                 );
 
 
             this.imageGlitches.push({
 
-                x,
+                // Valores normalizados.
+                // Serão convertidos no draw.
 
-                y,
+                x:
+                    (
+                        x /
+                        pseudoSourceWidth
+                    ),
 
-                width,
+                y:
+                    (
+                        y /
+                        pseudoSourceHeight
+                    ),
 
-                height,
+                width:
+                    width /
+                    pseudoSourceWidth,
 
+                height:
+                    height /
+                    pseudoSourceHeight,
+
+
+                // Offset normalizado.
 
                 offsetX:
                     dirX *
-                    outward,
+                    outward /
+                    120,
 
                 offsetY:
                     dirY *
-                    outward,
+                    outward /
+                    180,
 
+
+                // Pequeno movimento.
 
                 vx:
                     dirX *
                     (
-                        0.00002 +
+                        0.005 +
                         Math.random() *
-                        0.00010
+                        0.025
                     ),
 
                 vy:
                     dirY *
                     (
-                        0.00002 +
+                        0.005 +
                         Math.random() *
-                        0.00010
+                        0.025
                     ),
 
 
@@ -2371,7 +2065,7 @@ export class AngryEffects {
                         Math.random() -
                         0.5
                     ) *
-                    0.12,
+                    0.10,
 
 
                 rotationSpeed:
@@ -2379,7 +2073,7 @@ export class AngryEffects {
                         Math.random() -
                         0.5
                     ) *
-                    0.0003,
+                    0.0004,
 
 
                 life:
@@ -2387,19 +2081,19 @@ export class AngryEffects {
                     Math.random() *
                     (
                         strong
-                            ? 125
-                            : 85
+                            ? 130
+                            : 90
                     ),
 
 
                 maxLife:
-                    170,
+                    180,
 
 
                 alpha:
-                    0.45 +
+                    0.35 +
                     Math.random() *
-                    0.50
+                    0.55
 
             });
 
@@ -2409,16 +2103,16 @@ export class AngryEffects {
 
 
     // =========================================================
-    // FRAGMENTOS
+    // CRIA FRAGMENTOS GEOMÉTRICOS
     // =========================================================
 
     _spawnPeakFragments() {
 
         const amount =
             Math.floor(
-                10 +
+                8 +
                 this.intensity *
-                14
+                12
             );
 
 
@@ -2447,15 +2141,15 @@ export class AngryEffects {
 
 
             const radius =
-                60 +
+                70 +
                 Math.random() *
-                110;
+                100;
 
 
             const speed =
                 0.025 +
                 Math.random() *
-                0.13;
+                0.12;
 
 
             this.fragments.push({
@@ -2482,13 +2176,13 @@ export class AngryEffects {
                 width:
                     2 +
                     Math.random() *
-                    9,
+                    8,
 
 
                 height:
                     2 +
                     Math.random() *
-                    8,
+                    7,
 
 
                 rotation:
@@ -2507,30 +2201,20 @@ export class AngryEffects {
                 life:
                     400 +
                     Math.random() *
-                    850,
+                    800,
 
 
                 maxLife:
-                    1250,
-
-
-                glow:
-                    Math.random() >
-                    0.30,
+                    1200,
 
 
                 color:
                     Math.random() >
-                    0.45
+                    0.30
 
-                        ? '#ff3030'
+                        ? '#ff2020'
 
-                        : Math.random() >
-                          0.40
-
-                            ? '#ff7a20'
-
-                            : '#ffc044'
+                        : '#ff7777'
 
             });
 
@@ -2547,9 +2231,9 @@ export class AngryEffects {
 
         const amount =
             Math.floor(
-                25 +
+                18 +
                 this.intensity *
-                40
+                28
             );
 
 
@@ -2581,7 +2265,7 @@ export class AngryEffects {
 
 
     // =========================================================
-    // PARTÍCULA CONTÍNUA
+    // PARTÍCULA FLUTUANTE CONTÍNUA
     // =========================================================
 
     _spawnFloatingParticle() {
@@ -2617,19 +2301,23 @@ export class AngryEffects {
             2;
 
 
+        // -----------------------------------------------------
+        // Partículas nascem na periferia da cabeça.
+        // -----------------------------------------------------
+
         const radius =
             explosion
 
                 ? (
-                    40 +
+                    45 +
                     Math.random() *
-                    105
+                    95
                 )
 
                 : (
-                    45 +
+                    55 +
                     Math.random() *
-                    125
+                    110
                 );
 
 
@@ -2639,13 +2327,13 @@ export class AngryEffects {
                 ? (
                     0.035 +
                     Math.random() *
-                    0.17
+                    0.15
                 )
 
                 : (
-                    0.010 +
+                    0.012 +
                     Math.random() *
-                    0.065
+                    0.055
                 );
 
 
@@ -2660,39 +2348,24 @@ export class AngryEffects {
             0.78;
 
 
-        const colors = [
+        // -----------------------------------------------------
+        // Pequena variação vertical.
+        // -----------------------------------------------------
 
-            '#ff2020',
+        const verticalLift =
+            explosion
 
-            '#ff3d20',
-
-            '#ff6a20',
-
-            '#ff9325',
-
-            '#ffc247',
-
-            '#ffe08a'
-
-        ];
-
-
-        // Amarelo aparece menos que vermelho,
-        // mas agora existe de verdade.
-
-        const colorIndex =
-            Math.random() < 0.55
-
-                ? Math.floor(
+                ? (
+                    -0.015 -
                     Math.random() *
-                    3
+                    0.025
                 )
 
-                : 3 +
-                  Math.floor(
-                      Math.random() *
-                      3
-                  );
+                : (
+                    -0.004 -
+                    Math.random() *
+                    0.012
+                );
 
 
         this.particles.push({
@@ -2708,12 +2381,8 @@ export class AngryEffects {
 
             vy:
                 Math.sin(angle) *
-                speed -
-                (
-                    explosion
-                        ? 0.015
-                        : 0.005
-                ),
+                speed +
+                verticalLift,
 
 
             size:
@@ -2722,13 +2391,13 @@ export class AngryEffects {
                     ? (
                         1.2 +
                         Math.random() *
-                        4.5
+                        4.0
                     )
 
                     : (
                         0.8 +
                         Math.random() *
-                        3.2
+                        2.8
                     ),
 
 
@@ -2736,61 +2405,57 @@ export class AngryEffects {
                 explosion
 
                     ? (
-                        500 +
+                        450 +
                         Math.random() *
-                        1100
+                        950
                     )
 
                     : (
-                        750 +
+                        700 +
                         Math.random() *
-                        1700
+                        1500
                     ),
 
 
             maxLife:
                 explosion
-                    ? 1600
-                    : 2450,
+                    ? 1400
+                    : 2200,
 
 
             alpha:
                 explosion
 
                     ? (
-                        0.50 +
+                        0.45 +
                         Math.random() *
-                        0.50
+                        0.55
                     )
 
                     : (
-                        0.30 +
+                        0.25 +
                         Math.random() *
-                        0.65
+                        0.60
                     ),
 
 
             color:
-                colors[colorIndex],
+                Math.random() >
+                0.28
+
+                    ? '#ff3030'
+
+                    : (
+                        Math.random() >
+                        0.45
+                            ? '#ff7777'
+                            : '#ffb0b0'
+                    ),
 
 
             glow:
                 Math.random() >
-                0.28,
-
-
-            spark:
-                Math.random() >
-                0.45,
-
-
-            angle:
-                angle +
-                (
-                    Math.random() -
-                    0.5
-                ) *
-                0.8,
+                0.35,
 
 
             seed:
