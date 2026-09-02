@@ -1,1779 +1,436 @@
-import { HolographicTears } from './holographic_tears.js';
-import { AngryEffects } from './angry_effects.js';
 
-export class EmotionController {
+// ============================================================
+// ANGRY EFFECTS
+// Sistema visual procedural para a emoção "angry"
+// Compatível com EmotionController / detec_emotion.js
+// ============================================================
+
+export class AngryEffects {
 
     constructor() {
 
         // =====================================================
-        // ESTADO GERAL
+        // ESTADO DA EMOÇÃO
         // =====================================================
 
-        this.onEmotionChange = null;
+        this.currentEmotion = 'neutral';
 
-        this.active = false;
+        this.targetIntensity = 0;
 
-        this.video = null;
-
-        this.canvases = {};
+        this.intensity = 0;
 
 
         // =====================================================
-        // FACE API
+        // ANIMAÇÃO
         // =====================================================
 
-        this._faceBox = null;
+        this.time = 0;
 
-        this._smoothFaceBox = null;
-
-        this._faceSmoothing = 0.75;
-
-        this._landmarks = null;
-
-        this.showLandmarks = false;
+        this._lastUpdateTime = 0;
 
 
-        // =====================================================
-        // SISTEMA PROCEDURAL DE LÁGRIMAS
-        // =====================================================
+        // Velocidade de entrada do efeito
 
-        this._tears =
-            new HolographicTears();
-        
-        // =====================================================
-        // SISTEMA VISUAL DO ANGRY
-        // =====================================================
+        this._fadeInSpeed = 0.006;
 
-        this._angry =
-            new AngryEffects();
 
-        // =====================================================
-        // MODO CARROSSEL
-        // =====================================================
+        // Velocidade de saída
 
-        this.carouselMode = false;
+        this._fadeOutSpeed = 0.004;
 
 
         // =====================================================
-        // CONTROLE DE DETECÇÃO
+        // PARTÍCULAS / FAÍSCAS
         // =====================================================
 
-        this._detectingFace = false;
+        this.particles = [];
 
-        this._lastFaceDetectionTime = 0;
-
-        this._faceDetectionInterval = 80;
-
-        this._faceOptions = null;
+        this._particleCount = 18;
 
 
         // =====================================================
-        // ENQUADRAMENTO ESTÁVEL DA CABEÇA
+        // ONDULAÇÃO
         // =====================================================
 
-        this._headFrame = null;
-
-        this._headFrameInitialized = false;
-
-
-        /*
-         * O tamanho da janela da cabeça é calculado
-         * somente na primeira detecção.
-         */
-
-        this._headFrameWidthFactor = 2.8;
-
-        this._headFrameHeightFactor = 3.4;
-
-
-        /*
-         * Posição vertical da cabeça.
-         */
-
-        this._headFrameVerticalPosition = 0.56;
-
-
-        /*
-         * Suavização do movimento.
-         */
-
-        this._headFrameSmoothing = 0.92;
+        this.waveTime = 0;
 
 
         // =====================================================
-        // ESTABILIZAÇÃO TEMPORAL DAS EMOÇÕES
+        // RANDOM SEED
         // =====================================================
 
-        // Emoção atualmente confirmada.
-        this._lastEmotion = null;
-
-
-        // Emoção que está tentando assumir o controle.
-        this._candidateEmotion = null;
-
-
-        // Quantidade de frames consecutivos da candidata.
-        this._candidateEmotionCount = 0;
-
-
-        // Histórico recente das detecções.
-        this._emotionHistory = [];
-
-
-        // Quantidade máxima de detecções guardadas.
-        this._emotionHistorySize = 8;
-
-
-        // Confiança mínima para considerar uma emoção.
-        this._emotionMinConfidence = 0.35;
-
-
-        // Número mínimo de frames para confirmar
-        // uma nova emoção.
-        this._emotionRequiredFrames = 4;
+        this._randomSeed = Math.random() * 10000;
 
 
         // =====================================================
-        // TEMPO MÍNIMO DE PERMANÊNCIA
+        // CONFIGURAÇÃO VISUAL
         // =====================================================
 
-        /*
-         * Depois que uma emoção é confirmada,
-         * ela permanece protegida por este período.
-         *
-         * Exemplo:
-         *
-         * SAD
-         * ↓
-         * permanece SAD
-         * ↓
-         * pequenas oscilações não causam troca
-         *
-         */
+        this.config = {
 
-        this._emotionMinimumDuration = 2200;
+            // intensidade geral
+            maxIntensity: 1,
 
+            // quantidade de partículas
+            particleCount: 18,
 
-        // =====================================================
-        // TEMPO DE TRANSIÇÃO
-        // =====================================================
+            // velocidade das partículas
+            particleSpeed: 0.035,
 
-        /*
-         * Uma nova emoção precisa permanecer consistente
-         * durante este período antes de substituir a atual.
-         */
+            // vida das partículas
+            particleLife: 900,
 
-        this._emotionTransitionDuration = 700;
+            // tamanho mínimo
+            minParticleSize: 1.2,
 
+            // tamanho máximo
+            maxParticleSize: 4.5,
 
-        // Momento em que a emoção atual foi confirmada.
-        this._emotionStartTime = 0;
+            // espessura das linhas
+            lineWidth: 1.5,
 
+            // quantidade de linhas de tensão
+            tensionLines: 7
 
-        // Momento em que a emoção candidata começou.
-        this._candidateStartTime = 0;
+        };
 
 
         // =====================================================
-        // MEDIAPIPE
+        // CRIA PARTÍCULAS
         // =====================================================
 
-        this._segmentation = null;
-
-        this._segmentationMask = null;
-
-        this._segmentationImage = null;
-
-        this._lastValidMask = null;
-
-        this._lastMaskTime = 0;
-
-        this._segmentationReady = false;
-
-        this._sendingFrame = false;
-
-
-        // =====================================================
-        // CANVAS DA MÁSCARA
-        // =====================================================
-
-        this._maskCanvas =
-            document.createElement('canvas');
-
-        this._maskCtx =
-            this._maskCanvas.getContext('2d');
-
-
-        // =====================================================
-        // CANVAS DA PESSOA
-        // =====================================================
-
-        this._personCanvas =
-            document.createElement('canvas');
-
-        this._personCtx =
-            this._personCanvas.getContext('2d');
-
-
-        // =====================================================
-        // LOOP VISUAL
-        // =====================================================
-
-        this._renderLoop();
+        this._createParticles();
     }
 
 
     // =========================================================
-    // INICIALIZA MEDIAPIPE
+    // CRIA PARTÍCULAS
     // =========================================================
 
-    async _initSegmentation() {
+    _createParticles() {
 
-        if (this._segmentation) {
-            return;
-        }
+        this.particles = [];
 
 
-        if (
-            typeof SelfieSegmentation ===
-            'undefined'
+        for (
+            let i = 0;
+            i < this._particleCount;
+            i++
         ) {
 
-            throw new Error(
-                'SelfieSegmentation não foi carregado. ' +
-                'Verifique o index.html.'
-            );
-        }
+            this.particles.push({
 
+                x: Math.random(),
 
-        console.log(
-            'Inicializando MediaPipe Selfie Segmentation...'
-        );
+                y: Math.random(),
 
+                vx:
+                    (Math.random() - 0.5) *
+                    0.001,
 
-        this._segmentation =
-            new SelfieSegmentation({
+                vy:
+                    (Math.random() - 0.5) *
+                    0.001,
 
-                locateFile: (file) => {
+                size:
+                    this.config.minParticleSize +
+                    Math.random() *
+                    (
+                        this.config.maxParticleSize -
+                        this.config.minParticleSize
+                    ),
 
-                    return (
-                        'https://cdn.jsdelivr.net/npm/' +
-                        '@mediapipe/selfie_segmentation@0.1/' +
-                        file
-                    );
-                }
+                life:
+                    Math.random() *
+                    this.config.particleLife,
+
+                maxLife:
+                    this.config.particleLife *
+                    (
+                        0.7 +
+                        Math.random() * 0.6
+                    ),
+
+                phase:
+                    Math.random() *
+                    Math.PI *
+                    2,
+
+                speed:
+                    0.5 +
+                    Math.random() * 1.5
 
             });
-
-
-        this._segmentation.setOptions({
-
-            modelSelection: 1
-
-        });
-
-
-        this._segmentation.onResults(
-            (results) => {
-
-                if (
-                    !results ||
-                    !results.segmentationMask
-                ) {
-
-                    return;
-                }
-
-
-                // =================================================
-                // GUARDA MÁSCARA VÁLIDA
-                // =================================================
-
-                this._segmentationMask =
-                    results.segmentationMask;
-
-
-                this._segmentationImage =
-                    results.image;
-
-
-                this._lastValidMask =
-                    results.segmentationMask;
-
-
-                this._lastMaskTime =
-                    performance.now();
-
-
-                this._segmentationReady =
-                    true;
-            }
-        );
-
-
-        console.log(
-            'MediaPipe Selfie Segmentation inicializado.'
-        );
+        }
     }
 
 
     // =========================================================
-    // INICIA DETECÇÃO
+    // ALTERA EMOÇÃO
     // =========================================================
 
-    async startDetection(
-        stream,
-        existingVideo = null
+    setEmotion(
+        emotion,
+        confidence = 0
     ) {
 
-        if (this.active) {
-
-            console.warn(
-                'Detecção já estava ativa.'
-            );
-
-            return;
-        }
+        this.currentEmotion =
+            emotion || 'neutral';
 
 
         // =====================================================
-        // USA O VÍDEO EXISTENTE
-        // =====================================================
-
-        if (existingVideo) {
-
-            this.video =
-                existingVideo;
-
-        } else {
-
-            this.video =
-                document.createElement('video');
-
-
-            this.video.srcObject =
-                stream;
-
-
-            this.video.muted =
-                true;
-
-
-            this.video.autoplay =
-                true;
-
-
-            this.video.playsInline =
-                true;
-
-
-            await this.video.play();
-        }
-
-
-        // =====================================================
-        // ESPERA A CÂMERA ESTAR PRONTA
-        // =====================================================
-
-        await this._waitForVideo();
-
-
-        const width =
-            this.video.videoWidth;
-
-
-        const height =
-            this.video.videoHeight;
-
-
-        console.log(
-            `Câmera pronta: ${width}x${height}`
-        );
-
-
-        // =====================================================
-        // CONFIGURA CANVAS
-        // =====================================================
-
-        this._maskCanvas.width =
-            width;
-
-
-        this._maskCanvas.height =
-            height;
-
-
-        this._personCanvas.width =
-            width;
-
-
-        this._personCanvas.height =
-            height;
-
-
-        // =====================================================
-        // VERIFICA FACE API
+        // SOMENTE ANGRY ATIVA O SISTEMA
         // =====================================================
 
         if (
-            typeof faceapi ===
-            'undefined'
+            this.currentEmotion === 'angry'
         ) {
 
-            throw new Error(
-                'face-api.js não foi carregado.'
-            );
-        }
-
-
-        // =====================================================
-        // CONFIGURA DETECTOR FACIAL
-        // =====================================================
-
-        this._faceOptions =
-            new faceapi.TinyFaceDetectorOptions({
-
-                inputSize: 320,
-
-                scoreThreshold: 0.4
-
-            });
-
-
-        // =====================================================
-        // MEDIAPIPE
-        // =====================================================
-
-        await this._initSegmentation();
-
-
-        // =====================================================
-        // LIMPA ESTADOS ANTERIORES
-        // =====================================================
-
-        this._segmentationMask =
-            null;
-
-
-        this._segmentationImage =
-            null;
-
-
-        this._lastValidMask =
-            null;
-
-
-        this._segmentationReady =
-            false;
-
-
-        this._smoothFaceBox =
-            null;
-
-
-        this._faceBox =
-            null;
-
-
-        this._landmarks =
-            null;
-
-
-        this._headFrame =
-            null;
-
-
-        this._headFrameInitialized =
-            false;
-
-
-        // =====================================================
-        // RESET EMOÇÕES
-        // =====================================================
-
-        this._emotionHistory =
-            [];
-
-
-        this._lastEmotion =
-            null;
-
-
-        this._candidateEmotion =
-            null;
-
-
-        this._candidateEmotionCount =
-            0;
-
-
-        this._emotionStartTime =
-            0;
-
-
-        this._candidateStartTime =
-            0;
-
-
-        this._lastFaceDetectionTime =
-            0;
-
-
-        // =====================================================
-        // ATIVA
-        // =====================================================
-
-        this.active =
-            true;
-
-
-        console.log(
-            'EmotionController ativo.'
-        );
-
-
-        // =====================================================
-        // INICIA PROCESSAMENTOS
-        // =====================================================
-
-        this._segmentationLoop();
-
-        this._faceLoop();
-    }
-
-
-    // =========================================================
-    // ESPERA O VÍDEO
-    // =========================================================
-
-    async _waitForVideo() {
-
-        if (
-            this.video &&
-            this.video.videoWidth > 0 &&
-            this.video.videoHeight > 0
-        ) {
-
-            return;
-        }
-
-
-        await new Promise(
-            (resolve) => {
-
-                const check =
-                    () => {
-
-                        if (!this.video) {
-
-                            requestAnimationFrame(
-                                check
-                            );
-
-                            return;
-                        }
-
-
-                        if (
-                            this.video.videoWidth > 0 &&
-                            this.video.videoHeight > 0
-                        ) {
-
-                            resolve();
-
-                            return;
-                        }
-
-
-                        requestAnimationFrame(
-                            check
-                        );
-                    };
-
-
-                check();
-            }
-        );
-    }
-
-
-    // =========================================================
-    // LOOP MEDIAPIPE
-    // =========================================================
-
-    async _segmentationLoop() {
-
-        if (!this.active) {
-            return;
-        }
-
-
-        if (
-            this.video &&
-            this.video.readyState >= 2 &&
-            this._segmentation &&
-            !this._sendingFrame
-        ) {
-
-            this._sendingFrame =
-                true;
-
-
-            try {
-
-                await this._segmentation.send({
-
-                    image: this.video
-
-                });
-
-            } catch (error) {
-
-                console.error(
-                    'Erro no MediaPipe:',
-                    error
-                );
-
-            } finally {
-
-                this._sendingFrame =
-                    false;
-            }
-        }
-
-
-        requestAnimationFrame(
-            () =>
-                this._segmentationLoop()
-        );
-    }
-
-
-    // =========================================================
-    // LOOP FACE API
-    // =========================================================
-
-    _faceLoop() {
-
-        if (!this.active) {
-            return;
-        }
-
-
-        const now =
-            performance.now();
-
-
-        if (
-            now -
-            this._lastFaceDetectionTime
-            >=
-            this._faceDetectionInterval
-        ) {
-
-            this._lastFaceDetectionTime =
-                now;
-
-
-            this._detectFace();
-        }
-
-
-        requestAnimationFrame(
-            () =>
-                this._faceLoop()
-        );
-    }
-
-
-    // =========================================================
-    // DETECÇÃO FACIAL
-    // =========================================================
-
-    async _detectFace() {
-
-        if (
-            !this.video ||
-            !this.active ||
-            this._detectingFace
-        ) {
-
-            return;
-        }
-
-
-        if (
-            this.video.readyState < 2
-        ) {
-
-            return;
-        }
-
-
-        this._detectingFace =
-            true;
-
-
-        try {
-
-            let detection =
-                null;
-
-
-            // =================================================
-            // DETECÇÃO FACIAL COM LANDMARKS E EXPRESSÕES
-            // =================================================
-
-            detection =
-                await faceapi
-                    .detectSingleFace(
-                        this.video,
-                        this._faceOptions
-                    )
-                    .withFaceLandmarks(true)
-                    .withFaceExpressions();
-
-
-            // =================================================
-            // GUARDA LANDMARKS
-            // =================================================
-
-            this._landmarks =
-                detection?.landmarks ||
-                null;
-
-
-            // =================================================
-            // ROSTO ENCONTRADO
-            // =================================================
-
-            if (detection) {
-
-                const newBox =
-                    detection.detection.box;
-
-
-                // =============================================
-                // PRIMEIRA DETECÇÃO
-                // =============================================
-
-                if (
-                    !this._smoothFaceBox
-                ) {
-
-                    this._smoothFaceBox = {
-
-                        x: newBox.x,
-
-                        y: newBox.y,
-
-                        width: newBox.width,
-
-                        height: newBox.height
-
-                    };
-
-                }
-
-
-                // =============================================
-                // SUAVIZA O ROSTO
-                // =============================================
-
-                else {
-
-                    const s =
-                        this._faceSmoothing;
-
-
-                    this._smoothFaceBox.x =
-                        this._smoothFaceBox.x * s +
-                        newBox.x * (1 - s);
-
-
-                    this._smoothFaceBox.y =
-                        this._smoothFaceBox.y * s +
-                        newBox.y * (1 - s);
-
-
-                    this._smoothFaceBox.width =
-                        this._smoothFaceBox.width * s +
-                        newBox.width * (1 - s);
-
-
-                    this._smoothFaceBox.height =
-                        this._smoothFaceBox.height * s +
-                        newBox.height * (1 - s);
-                }
-
-
-                this._faceBox = {
-
-                    ...this._smoothFaceBox
-
-                };
-
-
-                // =============================================
-                // ATUALIZA ENQUADRAMENTO
-                // =============================================
-
-                this._updateHeadFrame();
-
-
-                // =============================================
-                // PROCESSA EMOÇÃO
-                // =============================================
-
-                if (
-                    detection.expressions
-                ) {
-
-                    this._processEmotion(
-                        detection.expressions
-                    );
-                }
-            }
-
-        } catch (error) {
-
-            console.error(
-                'Erro face-api:',
-                error
-            );
-
-        } finally {
-
-            this._detectingFace =
-                false;
-        }
-    }
-
-
-    // =========================================================
-    // ATUALIZA ENQUADRAMENTO DA CABEÇA
-    // =========================================================
-
-    _updateHeadFrame() {
-
-        if (
-            !this._faceBox ||
-            !this.video
-        ) {
-
-            return;
-        }
-
-
-        const videoW =
-            this.video.videoWidth;
-
-
-        const videoH =
-            this.video.videoHeight;
-
-
-        if (
-            !videoW ||
-            !videoH
-        ) {
-
-            return;
-        }
-
-
-        const face =
-            this._faceBox;
-
-
-        // =====================================================
-        // PRIMEIRA DETECÇÃO
-        // =====================================================
-
-        if (
-            !this._headFrameInitialized
-        ) {
-
-            const frameWidth =
-                face.width *
-                this._headFrameWidthFactor;
-
-
-            const frameHeight =
-                face.height *
-                this._headFrameHeightFactor;
-
-
-            const centerX =
-                face.x +
-                face.width / 2;
-
-
-            const centerY =
-                face.y +
-                face.height * 0.45;
-
-
-            this._headFrame = {
-
-                x:
-                    centerX -
-                    frameWidth / 2,
-
-                y:
-                    centerY -
-                    frameHeight *
-                    this._headFrameVerticalPosition,
-
-                width:
-                    frameWidth,
-
-                height:
-                    frameHeight
-            };
-
-
-            this._headFrameInitialized =
-                true;
-
-
-            this._clampHeadFrame();
-
-
-            return;
-        }
-
-
-        // =====================================================
-        // ENQUADRAMENTO JÁ EXISTE
-        // =====================================================
-
-        const frame =
-            this._headFrame;
-
-
-        const centerX =
-            face.x +
-            face.width / 2;
-
-
-        const centerY =
-            face.y +
-            face.height * 0.45;
-
-
-        const targetX =
-            centerX -
-            frame.width / 2;
-
-
-        const targetY =
-            centerY -
-            frame.height *
-            this._headFrameVerticalPosition;
-
-
-        const s =
-            this._headFrameSmoothing;
-
-
-        // =====================================================
-        // SUAVIZA SOMENTE POSIÇÃO
-        // =====================================================
-
-        frame.x =
-            frame.x * s +
-            targetX * (1 - s);
-
-
-        frame.y =
-            frame.y * s +
-            targetY * (1 - s);
-
-
-        // =====================================================
-        // LIMITA À CÂMERA
-        // =====================================================
-
-        this._clampHeadFrame();
-    }
-
-
-    // =========================================================
-    // LIMITA ENQUADRAMENTO À CÂMERA
-    // =========================================================
-
-    _clampHeadFrame() {
-
-        if (
-            !this._headFrame ||
-            !this.video
-        ) {
-
-            return;
-        }
-
-
-        const videoW =
-            this.video.videoWidth;
-
-
-        const videoH =
-            this.video.videoHeight;
-
-
-        const frame =
-            this._headFrame;
-
-
-        // =====================================================
-        // HORIZONTAL
-        // =====================================================
-
-        if (
-            frame.width >= videoW
-        ) {
-
-            frame.x =
-                0;
-
-            frame.width =
-                videoW;
-
-        } else {
-
-            frame.x =
+            const normalizedConfidence =
                 Math.max(
                     0,
                     Math.min(
-                        frame.x,
-                        videoW -
-                        frame.width
+                        1,
+                        Number(confidence) || 0
                     )
                 );
-        }
 
 
-        // =====================================================
-        // VERTICAL
-        // =====================================================
+            /*
+             * Evita que uma confiança muito baixa
+             * produza um efeito exagerado.
+             */
 
-        if (
-            frame.height >= videoH
-        ) {
-
-            frame.y =
-                0;
-
-            frame.height =
-                videoH;
+            this.targetIntensity =
+                Math.max(
+                    0.25,
+                    normalizedConfidence
+                );
 
         } else {
 
-            frame.y =
-                Math.max(
-                    0,
-                    Math.min(
-                        frame.y,
-                        videoH -
-                        frame.height
-                    )
-                );
+            this.targetIntensity = 0;
         }
     }
 
 
     // =========================================================
-    // PROCESSA EMOÇÃO
+    // ATUALIZA ANIMAÇÃO
     // =========================================================
 
-    _processEmotion(expressions) {
+    update(delta = 16) {
 
-        if (!expressions) {
-            return;
-        }
-
-
-        // =====================================================
-        // ENCONTRA EMOÇÃO MAIS PROVÁVEL
-        // =====================================================
-
-        let detectedEmotion =
-            'neutral';
-
-
-        let detectedConfidence =
-            0;
-
-
-        for (
-            const [name, value]
-            of Object.entries(expressions)
-        ) {
-
-            if (
-                value >
-                detectedConfidence
-            ) {
-
-                detectedConfidence =
-                    value;
-
-                detectedEmotion =
-                    name;
-            }
-        }
-
-
-        // =====================================================
-        // CONFIDÊNCIA MÍNIMA
-        // =====================================================
+        // proteção contra valores inválidos
 
         if (
-            detectedConfidence <
-            this._emotionMinConfidence
+            !Number.isFinite(delta) ||
+            delta < 0
         ) {
 
-            return;
+            delta = 16;
         }
 
 
-        const now =
-            performance.now();
-
-
-        // =====================================================
-        // GUARDA NO HISTÓRICO
-        // =====================================================
-
-        this._emotionHistory.push({
-
-            emotion:
-                detectedEmotion,
-
-            confidence:
-                detectedConfidence,
-
-            time:
-                now
-
-        });
-
-
-        if (
-            this._emotionHistory.length >
-            this._emotionHistorySize
-        ) {
-
-            this._emotionHistory.shift();
-        }
-
-
-        // =====================================================
-        // ENCONTRA EMOÇÃO DOMINANTE
-        // =====================================================
-
-        const counts =
-            {};
-
-
-        for (
-            const item
-            of this._emotionHistory
-        ) {
-
-            counts[item.emotion] =
-                (counts[item.emotion] || 0) +
-                1;
-        }
-
-
-        let dominantEmotion =
-            detectedEmotion;
-
-
-        let dominantCount =
-            0;
-
-
-        for (
-            const [emotion, count]
-            of Object.entries(counts)
-        ) {
-
-            if (
-                count >
-                dominantCount
-            ) {
-
-                dominantEmotion =
-                    emotion;
-
-                dominantCount =
-                    count;
-            }
-        }
-
-
-        // =====================================================
-        // CONFIANÇA MÉDIA
-        // =====================================================
-
-        let confidenceSum =
-            0;
-
-
-        let confidenceCount =
-            0;
-
-
-        for (
-            const item
-            of this._emotionHistory
-        ) {
-
-            if (
-                item.emotion ===
-                dominantEmotion
-            ) {
-
-                confidenceSum +=
-                    item.confidence;
-
-                confidenceCount++;
-            }
-        }
-
-
-        const averageConfidence =
-            confidenceCount > 0
-                ? confidenceSum /
-                  confidenceCount
-                : detectedConfidence;
-
-
-        // =====================================================
-        // PRIMEIRA EMOÇÃO
-        // =====================================================
-
-        if (
-            this._lastEmotion === null
-        ) {
-
-            if (
-                this._candidateEmotion !==
-                dominantEmotion
-            ) {
-
-                this._candidateEmotion =
-                    dominantEmotion;
-
-                this._candidateEmotionCount =
-                    1;
-
-                this._candidateStartTime =
-                    now;
-
-                return;
-            }
-
-
-            this._candidateEmotionCount++;
-
-
-            const candidateDuration =
-                now -
-                this._candidateStartTime;
-
-
-            if (
-                this._candidateEmotionCount >=
-                    this._emotionRequiredFrames &&
-                candidateDuration >=
-                    this._emotionTransitionDuration
-            ) {
-
-                this._confirmEmotion(
-                    dominantEmotion,
-                    averageConfidence,
-                    now
-                );
-            }
-
-
-            return;
-        }
-
-
-        // =====================================================
-        // MESMA EMOÇÃO ATUAL
-        // =====================================================
-
-        if (
-            dominantEmotion ===
-            this._lastEmotion
-        ) {
-
-            /*
-             * A emoção atual continua válida.
-             *
-             * Pequenas oscilações do reconhecimento
-             * não provocam mudança.
-             */
-
-            this._candidateEmotion =
-                null;
-
-
-            this._candidateEmotionCount =
-                0;
-
-
-            this._candidateStartTime =
-                0;
-
-
-            return;
-        }
-
-
-        // =====================================================
-        // NOVA EMOÇÃO APARECEU
-        // =====================================================
-
-        if (
-            this._candidateEmotion !==
-            dominantEmotion
-        ) {
-
-            /*
-             * Começa uma nova tentativa
-             * de transição.
-             */
-
-            this._candidateEmotion =
-                dominantEmotion;
-
-
-            this._candidateEmotionCount =
-                1;
-
-
-            this._candidateStartTime =
-                now;
-
-
-            return;
-        }
-
-
-        // =====================================================
-        // CANDIDATA CONTINUA PRESENTE
-        // =====================================================
-
-        this._candidateEmotionCount++;
-
-
-        const candidateDuration =
-            now -
-            this._candidateStartTime;
-
-
-        // =====================================================
-        // PROTEÇÃO DA EMOÇÃO ATUAL
-        // =====================================================
-
-        const currentEmotionDuration =
-            now -
-            this._emotionStartTime;
-
-
-        if (
-            currentEmotionDuration <
-            this._emotionMinimumDuration
-        ) {
-
-            return;
-        }
-
-
-        // =====================================================
-        // TEMPO DE TRANSIÇÃO
-        // =====================================================
-
-        if (
-            candidateDuration <
-            this._emotionTransitionDuration
-        ) {
-
-            return;
-        }
-
-
-        // =====================================================
-        // FRAMES SUFICIENTES
-        // =====================================================
-
-        if (
-            this._candidateEmotionCount <
-            this._emotionRequiredFrames
-        ) {
-
-            return;
-        }
-
-
-        // =====================================================
-        // CONFIRMA NOVA EMOÇÃO
-        // =====================================================
-
-        this._confirmEmotion(
-            dominantEmotion,
-            averageConfidence,
-            now
-        );
-    }
-
-
-    // =========================================================
-    // CONFIRMA EMOÇÃO
-    // =========================================================
-
-    _confirmEmotion(
-        emotion,
-        confidence,
-        now
-    ) {
-
-        // =====================================================
-        // ATUALIZA ESTADO
-        // =====================================================
-
-        this._lastEmotion =
-            emotion;
-
-
-        this._emotionStartTime =
-            now;
-
-
-        // =====================================================
-        // LIMPA CANDIDATA
-        // =====================================================
-
-        this._candidateEmotion =
-            null;
-
-
-        this._candidateEmotionCount =
-            0;
-
-
-        this._candidateStartTime =
-            0;
-
-
-        console.log(
-            'Emoção estabilizada:',
-            emotion,
-            'confiança:',
-            confidence.toFixed(2)
-        );
-
-
-        // =====================================================
-        // ATUALIZA SISTEMA DE LÁGRIMAS
-        // =====================================================
-
-        if (
-            this._tears
-        ) {
-
-            this._tears.setEmotion(
-                emotion,
-                confidence
+        // evita saltos gigantes
+
+        delta =
+            Math.min(
+                delta,
+                50
             );
-        }
+
 
         // =====================================================
-        // ATUALIZA EFEITOS DO ANGRY
+        // TEMPO
         // =====================================================
 
-if (
-    this._angry
-) {
+        this.time += delta;
 
-    this._angry.setEmotion(
-        emotion,
-        confidence
-    );
-}
+        this.waveTime +=
+            delta * 0.002;
+
 
         // =====================================================
-        // ENVIA PARA O SISTEMA PRINCIPAL
+        // TRANSIÇÃO DA INTENSIDADE
         // =====================================================
 
         if (
-            this.onEmotionChange
+            this.intensity <
+            this.targetIntensity
         ) {
 
-            this.onEmotionChange(
+            this.intensity +=
+                this._fadeInSpeed *
+                delta;
 
-                emotion,
+        } else if (
+            this.intensity >
+            this.targetIntensity
+        ) {
 
-                confidence
+            this.intensity -=
+                this._fadeOutSpeed *
+                delta;
+        }
 
+
+        this.intensity =
+            Math.max(
+                0,
+                Math.min(
+                    1,
+                    this.intensity
+                )
             );
-        }
-    }
 
 
-    // =========================================================
-    // LOOP VISUAL
-    // =========================================================
+        // =====================================================
+        // ATUALIZA PARTÍCULAS
+        // =====================================================
 
-    _renderLoop() {
-
-    // =====================================================
-    // ATUALIZA EFEITOS DO ANGRY
-    // =====================================================
-
-    if (
-        this._angry
-    ) {
-
-        const now =
-            performance.now();
-
-        if (
-            !this._angry._lastUpdateTime
-        ) {
-
-            this._angry._lastUpdateTime =
-                now;
-
-        }
-
-        const delta =
-            now -
-            this._angry._lastUpdateTime;
-
-        this._angry._lastUpdateTime =
-            now;
-
-        this._angry.update(
+        this._updateParticles(
             delta
         );
     }
 
 
-    // =====================================================
-    // DESENHA
-    // =====================================================
-
-    this._drawAll();
-
-
-    requestAnimationFrame(
-        () =>
-            this._renderLoop()
-    );
-}
-
-
     // =========================================================
-    // REGISTRA CANVAS
+    // ATUALIZA PARTÍCULAS
     // =========================================================
 
-    registerCanvas(
-        id,
-        canvas,
-        videoEl
-    ) {
-
-        if (!canvas) {
-            return;
-        }
-
-
-        const ctx =
-            canvas.getContext('2d');
-
-
-        if (!ctx) {
-            return;
-        }
-
-
-        this.canvases[id] = {
-
-            canvas,
-
-            videoEl,
-
-            ctx
-
-        };
-    }
-
-
-    // =========================================================
-    // DESENHA TODOS OS CANVASES
-    // =========================================================
-
-    _drawAll() {
-
-        if (!this.video) {
-            return;
-        }
-
-
-        if (
-            this.video.readyState < 2 ||
-            !this.video.videoWidth
-        ) {
-
-            return;
-        }
-
+    _updateParticles(delta) {
 
         for (
-            const item
-            of Object.values(
-                this.canvases
-            )
+            const particle
+            of this.particles
         ) {
 
-            const {
-                canvas,
-                ctx
-            } = item;
-
-
-            if (
-                !canvas ||
-                !ctx
-            ) {
-
-                continue;
-            }
-
-
-            const w =
-                canvas.width;
-
-
-            const h =
-                canvas.height;
-
-
-            if (
-                w <= 0 ||
-                h <= 0
-            ) {
-
-                continue;
-            }
+            particle.life -=
+                delta;
 
 
             // =================================================
-            // FUNDO PRETO
-            // =================================================
-
-            ctx.save();
-
-
-            ctx.globalCompositeOperation =
-                'source-over';
-
-
-            ctx.fillStyle =
-                '#000000';
-
-
-            ctx.fillRect(
-                0,
-                0,
-                w,
-                h
-            );
-
-
-            // =================================================
-            // AGUARDA MÁSCARA
+            // RENOVA PARTÍCULA
             // =================================================
 
             if (
-                !this._segmentationReady
+                particle.life <= 0
             ) {
 
-                ctx.restore();
+                particle.x =
+                    Math.random();
 
-                continue;
+                particle.y =
+                    Math.random();
+
+                particle.vx =
+                    (
+                        Math.random() -
+                        0.5
+                    ) *
+                    0.001;
+
+                particle.vy =
+                    (
+                        Math.random() -
+                        0.5
+                    ) *
+                    0.001;
+
+                particle.life =
+                    particle.maxLife;
             }
 
 
             // =================================================
-            // USA MÁSCARA ATUAL
+            // MOVIMENTO
             // =================================================
 
-            const mask =
-                this._segmentationMask ||
-                this._lastValidMask;
+            particle.x +=
+                particle.vx *
+                delta *
+                this.config.particleSpeed *
+                20;
 
 
-            if (!mask) {
+            particle.y +=
+                particle.vy *
+                delta *
+                this.config.particleSpeed *
+                20;
 
-                ctx.restore();
 
-                continue;
+            // =================================================
+            // MOVIMENTO ORGÂNICO
+            // =================================================
+
+            particle.x +=
+                Math.sin(
+                    this.time *
+                    0.003 *
+                    particle.speed +
+                    particle.phase
+                ) *
+                0.00012 *
+                delta;
+
+
+            particle.y +=
+                Math.cos(
+                    this.time *
+                    0.002 *
+                    particle.speed +
+                    particle.phase
+                ) *
+                0.00008 *
+                delta;
+
+
+            // =================================================
+            // WRAP
+            // =================================================
+
+            if (
+                particle.x < 0
+            ) {
+
+                particle.x = 1;
+
+            } else if (
+                particle.x > 1
+            ) {
+
+                particle.x = 0;
             }
 
 
-            // =================================================
-            // DESENHA CABEÇA SEGMENTADA
-            // =================================================
+            if (
+                particle.y < 0
+            ) {
 
-            this._drawHeadSegmented(
+                particle.y = 1;
 
-                ctx,
+            } else if (
+                particle.y > 1
+            ) {
 
-                w,
-
-                h,
-
-                mask
-
-            );
-
-
-            ctx.restore();
+                particle.y = 0;
+            }
         }
     }
 
 
     // =========================================================
-    // DESENHA SOMENTE A CABEÇA SEGMENTADA
+    // DESENHA
     // =========================================================
 
-    _drawHeadSegmented(
+    draw(
         ctx,
-        outputW,
-        outputH,
-        segmentationMask
+        options = {}
     ) {
 
-        const videoW =
-            this.video.videoWidth;
-
-
-        const videoH =
-            this.video.videoHeight;
-
-
         if (
-            !videoW ||
-            !videoH
+            !ctx
         ) {
 
             return;
@@ -1781,25 +438,11 @@ if (
 
 
         // =====================================================
-        // AGUARDA DETECÇÃO FACIAL
+        // SE NÃO É ANGRY, NÃO DESENHA
         // =====================================================
 
         if (
-            !this._faceBox ||
-            !this._headFrame
-        ) {
-
-            return;
-        }
-
-
-        const frame =
-            this._headFrame;
-
-
-        if (
-            frame.width <= 0 ||
-            frame.height <= 0
+            this.intensity <= 0.001
         ) {
 
             return;
@@ -1807,389 +450,468 @@ if (
 
 
         // =====================================================
-        // COPIA MÁSCARA MEDIAPIPE
+        // PARÂMETROS RECEBIDOS DO EmotionController
         // =====================================================
 
-        const maskCtx =
-            this._maskCtx;
+        const drawX =
+            Number(options.drawX) || 0;
 
+        const drawY =
+            Number(options.drawY) || 0;
 
-        maskCtx.clearRect(
-            0,
-            0,
-            videoW,
-            videoH
-        );
+        const drawWidth =
+            Number(options.drawWidth) || 0;
 
-
-        maskCtx.globalCompositeOperation =
-            'source-over';
-
-
-        maskCtx.drawImage(
-
-            segmentationMask,
-
-            0,
-            0,
-            videoW,
-            videoH
-
-        );
-
-
-        // =====================================================
-        // COPIA IMAGEM DA CÂMERA
-        // =====================================================
-
-        const personCtx =
-            this._personCtx;
-
-
-        personCtx.clearRect(
-            0,
-            0,
-            videoW,
-            videoH
-        );
-
-
-        personCtx.globalCompositeOperation =
-            'source-over';
-
-
-        personCtx.drawImage(
-
-            this.video,
-
-            0,
-            0,
-            videoW,
-            videoH
-
-        );
-
-
-        // =====================================================
-        // APLICA SEGMENTAÇÃO
-        // =====================================================
-
-        personCtx.globalCompositeOperation =
-            'destination-in';
-
-
-        personCtx.drawImage(
-
-            this._maskCanvas,
-
-            0,
-            0
-
-        );
-
-
-        // =====================================================
-        // LIMITA À JANELA DA CABEÇA
-        // =====================================================
-
-        personCtx.globalCompositeOperation =
-            'destination-in';
-
-
-        personCtx.fillStyle =
-            '#ffffff';
-
-
-        personCtx.fillRect(
-
-            frame.x,
-
-            frame.y,
-
-            frame.width,
-
-            frame.height
-
-        );
-
-
-        // =====================================================
-        // MANTÉM PROPORÇÃO
-        // =====================================================
-
-        const sourceAspect =
-            frame.width /
-            frame.height;
-
-
-        const outputAspect =
-            outputW /
-            outputH;
-
-
-        let drawWidth =
-            outputW;
-
-
-        let drawHeight =
-            outputH;
-
-
-        let drawX =
-            0;
-
-
-        let drawY =
-            0;
+        const drawHeight =
+            Number(options.drawHeight) || 0;
 
 
         if (
-            sourceAspect >
-            outputAspect
+            drawWidth <= 0 ||
+            drawHeight <= 0
         ) {
 
-            drawHeight =
-                outputH;
-
-
-            drawWidth =
-                outputH *
-                sourceAspect;
-
-
-            drawX =
-                (
-                    outputW -
-                    drawWidth
-                ) / 2;
-
-        } else {
-
-            drawWidth =
-                outputW;
-
-
-            drawHeight =
-                outputW /
-                sourceAspect;
-
-
-            drawY =
-                (
-                    outputH -
-                    drawHeight
-                ) / 2;
+            return;
         }
 
 
+        const intensity =
+            this.intensity;
+
+
         // =====================================================
-        // DESENHA NO HOLOGRAMA
+        // SALVA CONTEXTO
         // =====================================================
 
-        ctx.drawImage(
+        ctx.save();
 
-            this._personCanvas,
 
-            frame.x,
-            frame.y,
-            frame.width,
-            frame.height,
+        /*
+         * Tudo fica limitado à área da cabeça.
+         */
 
+        ctx.beginPath();
+
+        ctx.rect(
             drawX,
             drawY,
             drawWidth,
             drawHeight
+        );
+
+        ctx.clip();
+
+
+        // =====================================================
+        // EFEITO DE TENSÃO AO REDOR DA CABEÇA
+        // =====================================================
+
+        this._drawTensionLines(
+
+            ctx,
+
+            drawX,
+            drawY,
+            drawWidth,
+            drawHeight,
+
+            intensity
 
         );
 
 
         // =====================================================
-        // LÁGRIMAS HOLOGRÁFICAS
+        // PARTÍCULAS
         // =====================================================
 
-        if (
-            this._landmarks &&
-            this._tears
-        ) {
+        this._drawParticles(
 
-            const scaleX =
-                drawWidth /
-                frame.width;
+            ctx,
+
+            drawX,
+            drawY,
+            drawWidth,
+            drawHeight,
+
+            intensity
+
+        );
 
 
-            const scaleY =
-                drawHeight /
-                frame.height;
+        // =====================================================
+        // LINHAS DE ENERGIA
+        // =====================================================
+
+        this._drawEnergyWaves(
+
+            ctx,
+
+            drawX,
+            drawY,
+            drawWidth,
+            drawHeight,
+
+            intensity
+
+        );
 
 
-            this._tears.draw(
+        ctx.restore();
+    }
 
-                ctx,
 
-                this._landmarks.positions,
+    // =========================================================
+    // LINHAS DE TENSÃO
+    // =========================================================
 
-                {
+    _drawTensionLines(
+        ctx,
+        x,
+        y,
+        width,
+        height,
+        intensity
+    ) {
 
-                    frameX:
-                        frame.x,
+        const count =
+            this.config.tensionLines;
 
-                    frameY:
-                        frame.y,
 
-                    drawX:
-                        drawX,
+        ctx.save();
 
-                    drawY:
-                        drawY,
 
-                    scaleX:
-                        scaleX,
-
-                    scaleY:
-                        scaleY,
-
-                    scale:
-                        (
-                            scaleX +
-                            scaleY
-                        ) / 2
-
-                }
-
+        ctx.lineWidth =
+            this.config.lineWidth *
+            (
+                0.6 +
+                intensity *
+                1.4
             );
 
-            // =====================================================
-// EFEITOS VISUAIS DO ANGRY
-// =====================================================
 
-if (
-    this._angry
-) {
+        ctx.globalAlpha =
+            0.12 +
+            intensity *
+            0.35;
 
-    this._angry.draw(
+
+        /*
+         * As linhas ficam principalmente
+         * nas regiões laterais e superiores,
+         * criando uma sensação de tensão.
+         */
+
+        for (
+            let i = 0;
+            i < count;
+            i++
+        ) {
+
+            const phase =
+                this.waveTime *
+                1.5 +
+                i *
+                1.7;
+
+
+            const side =
+                i % 2 === 0
+                    ? -1
+                    : 1;
+
+
+            const normalizedY =
+                0.12 +
+                (
+                    i /
+                    Math.max(
+                        1,
+                        count - 1
+                    )
+                ) *
+                0.76;
+
+
+            const startX =
+                side < 0
+                    ? x + width * 0.08
+                    : x + width * 0.92;
+
+
+            const endX =
+                side < 0
+                    ? x + width * 0.02
+                    : x + width * 0.98;
+
+
+            const startY =
+                y +
+                height *
+                normalizedY;
+
+
+            const endY =
+                startY +
+                Math.sin(phase) *
+                height *
+                0.035;
+
+
+            ctx.beginPath();
+
+
+            ctx.moveTo(
+                startX,
+                startY
+            );
+
+
+            ctx.lineTo(
+                endX,
+                endY
+            );
+
+
+            ctx.stroke();
+        }
+
+
+        ctx.restore();
+    }
+
+
+    // =========================================================
+    // PARTÍCULAS
+    // =========================================================
+
+    _drawParticles(
         ctx,
-        {
-            drawX:
-                drawX,
-
-            drawY:
-                drawY,
-
-            drawWidth:
-                drawWidth,
-
-            drawHeight:
-                drawHeight
-        }
-    );
-}
-            
-        }
-    }
-
-
-    // =========================================================
-    // CONTROLES
-    // =========================================================
-
-    setLandmarksVisible(
-        visible
+        x,
+        y,
+        width,
+        height,
+        intensity
     ) {
 
-        this.showLandmarks =
-            Boolean(visible);
+        ctx.save();
+
+
+        for (
+            const particle
+            of this.particles
+        ) {
+
+            // partículas ficam quase invisíveis
+            // quando o angry está fraco
+
+            const lifeRatio =
+                Math.max(
+                    0,
+                    Math.min(
+                        1,
+                        particle.life /
+                        particle.maxLife
+                    )
+                );
+
+
+            const alpha =
+                intensity *
+                lifeRatio *
+                0.55;
+
+
+            if (
+                alpha <= 0.01
+            ) {
+
+                continue;
+            }
+
+
+            const px =
+                x +
+                particle.x *
+                width;
+
+
+            const py =
+                y +
+                particle.y *
+                height;
+
+
+            const pulse =
+                0.7 +
+                Math.sin(
+                    this.time *
+                    0.006 +
+                    particle.phase
+                ) *
+                0.3;
+
+
+            const size =
+                particle.size *
+                (
+                    0.6 +
+                    intensity *
+                    0.8
+                ) *
+                pulse;
+
+
+            ctx.globalAlpha =
+                alpha;
+
+
+            ctx.beginPath();
+
+
+            ctx.arc(
+                px,
+                py,
+                size,
+                0,
+                Math.PI * 2
+            );
+
+
+            ctx.fill();
+        }
+
+
+        ctx.restore();
     }
 
 
-    setCarouselMode(
-        enabled
+    // =========================================================
+    // ONDAS DE ENERGIA
+    // =========================================================
+
+    _drawEnergyWaves(
+        ctx,
+        x,
+        y,
+        width,
+        height,
+        intensity
     ) {
 
-        this.carouselMode =
-            Boolean(enabled);
-    }
+        ctx.save();
 
 
-    // =========================================================
-    // PARA DETECÇÃO
-    // =========================================================
-
-    stop() {
-
-        this.active =
-            false;
+        ctx.lineWidth =
+            0.8 +
+            intensity *
+            1.5;
 
 
-        this._sendingFrame =
-            false;
+        ctx.globalAlpha =
+            0.08 +
+            intensity *
+            0.20;
 
 
-        this._detectingFace =
-            false;
+        /*
+         * Ondas horizontais discretas.
+         */
+
+        const waveCount = 4;
 
 
-        this._segmentationMask =
-            null;
+        for (
+            let i = 0;
+            i < waveCount;
+            i++
+        ) {
+
+            const baseY =
+                y +
+                height *
+                (
+                    0.20 +
+                    i *
+                    0.20
+                );
 
 
-        this._lastValidMask =
-            null;
+            const amplitude =
+                height *
+                0.012 *
+                intensity;
 
 
-        this._segmentationReady =
-            false;
+            const frequency =
+                0.012 +
+                i *
+                0.002;
 
 
-        this._faceBox =
-            null;
+            ctx.beginPath();
 
 
-        this._smoothFaceBox =
-            null;
+            const step =
+                Math.max(
+                    8,
+                    width / 80
+                );
 
 
-        this._landmarks =
-            null;
+            for (
+                let px = 0;
+                px <= width;
+                px += step
+            ) {
+
+                const wave =
+                    Math.sin(
+                        px *
+                        frequency +
+                        this.waveTime *
+                        (
+                            2 +
+                            i *
+                            0.5
+                        )
+                    ) *
+                    amplitude;
 
 
-        this._headFrame =
-            null;
+                const py =
+                    baseY +
+                    wave;
 
 
-        this._headFrameInitialized =
-            false;
+                if (
+                    px === 0
+                ) {
+
+                    ctx.moveTo(
+                        x + px,
+                        py
+                    );
+
+                } else {
+
+                    ctx.lineTo(
+                        x + px,
+                        py
+                    );
+                }
+            }
 
 
-        // =====================================================
-        // RESET EMOÇÕES
-        // =====================================================
-
-        this._emotionHistory =
-            [];
+            ctx.stroke();
+        }
 
 
-        this._lastEmotion =
-            null;
-
-
-        this._candidateEmotion =
-            null;
-
-
-        this._candidateEmotionCount =
-            0;
-
-
-        this._emotionStartTime =
-            0;
-
-
-        this._candidateStartTime =
-            0;
-
-
-        console.log(
-            'EmotionController parado.'
-        );
+        ctx.restore();
     }
 }
+
+
+// ============================================================
+// FIM
+// ============================================================
+
