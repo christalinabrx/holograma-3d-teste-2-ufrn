@@ -1,4 +1,3 @@
-
 import { HolographicTears } from './holographic_tears.js';
 
 export class EmotionController {
@@ -97,14 +96,6 @@ export class EmotionController {
         // CONFIGURAÇÃO DAS EMOÇÕES
         // =====================================================
 
-        /*
-         * A maioria das emoções continua usando 0.35.
-         *
-         * SAD recebe um limite menor porque o modelo
-         * frequentemente atribui uma confiança mais baixa
-         * para tristeza, mesmo quando a expressão está clara.
-         */
-
         this._emotionMinConfidence = 0.35;
 
         this._emotionMinConfidenceByType = {
@@ -114,17 +105,11 @@ export class EmotionController {
         };
 
 
-        /*
-         * Quantidade padrão de detecções para confirmar
-         * uma nova emoção.
-         */
+        // =====================================================
+        // FRAMES NECESSÁRIOS PARA CONFIRMAR
+        // =====================================================
 
         this._emotionRequiredFrames = 2;
-
-
-        /*
-         * SAD pode ser confirmada um pouco mais rapidamente.
-         */
 
         this._emotionRequiredFramesByType = {
 
@@ -146,11 +131,6 @@ export class EmotionController {
 
         this._emotionTransitionDuration = 300;
 
-
-        /*
-         * SAD possui transição um pouco mais rápida.
-         */
-
         this._emotionTransitionDurationByType = {
 
             sad: 500
@@ -158,11 +138,35 @@ export class EmotionController {
         };
 
 
+        // =====================================================
+        // NOVA PROTEÇÃO DE ESTABILIDADE
+        // =====================================================
+
+        /*
+         * Depois que uma emoção está ativa, uma nova emoção
+         * precisa permanecer estável durante este período
+         * antes de substituir a emoção atual.
+         *
+         * Isso evita principalmente:
+         *
+         * FELIZ -> NEUTRO
+         *
+         * imediatamente após desfazer o sorriso.
+         *
+         * A detecção continua acontecendo normalmente,
+         * mas a mudança visual/emocional é retardada.
+         */
+
+        this._emotionExitDelay = 3000;
+
+
         // Momento em que a emoção atual foi confirmada.
+
         this._emotionStartTime = 0;
 
 
         // Momento em que a emoção candidata começou.
+
         this._candidateStartTime = 0;
 
 
@@ -417,16 +421,6 @@ export class EmotionController {
         // =====================================================
         // CONFIGURA DETECTOR FACIAL
         // =====================================================
-
-        /*
-         * 416 aumenta a resolução usada pelo TinyFaceDetector.
-         *
-         * Isso ajuda principalmente quando o rosto ocupa
-         * uma área menor do vídeo.
-         *
-         * O threshold 0.20 também permite que o detector
-         * aceite rostos com score um pouco menor.
-         */
 
         this._faceOptions =
             new faceapi.TinyFaceDetectorOptions({
@@ -1292,9 +1286,6 @@ export class EmotionController {
         }
 
 
-     
-
-
         // =====================================================
         // CONFIANÇA MÉDIA
         // =====================================================
@@ -1406,6 +1397,14 @@ export class EmotionController {
             this._lastEmotion
         ) {
 
+            /*
+             * A emoção atual voltou a ser dominante.
+             *
+             * Portanto cancelamos imediatamente a candidata.
+             * Isso é importante para evitar que uma pequena
+             * oscilação do face-api.js provoque uma mudança.
+             */
+
             this._candidateEmotion =
                 null;
 
@@ -1443,6 +1442,12 @@ export class EmotionController {
                 now;
 
 
+            console.log(
+                'Nova emoção candidata:',
+                dominantEmotion
+            );
+
+
             return;
         }
 
@@ -1471,6 +1476,44 @@ export class EmotionController {
         if (
             currentEmotionDuration <
             this._emotionMinimumDuration
+        ) {
+
+            return;
+        }
+
+
+        // =====================================================
+        // NOVA PROTEÇÃO — 3 SEGUNDOS
+        // =====================================================
+
+        /*
+         * Aqui está a principal alteração.
+         *
+         * A nova emoção precisa permanecer candidata durante
+         * pelo menos 3 segundos antes de substituir a emoção
+         * que está atualmente ativa.
+         *
+         * Exemplo:
+         *
+         * FELIZ
+         *   ↓
+         * usuário desfaz o sorriso
+         *   ↓
+         * face-api detecta NEUTRAL
+         *   ↓
+         * NEUTRAL vira candidata
+         *   ↓
+         * espera 3 segundos
+         *   ↓
+         * NEUTRAL é confirmada
+         *
+         * Se o usuário voltar a sorrir antes dos 3 segundos,
+         * a candidata NEUTRAL é cancelada.
+         */
+
+        if (
+            candidateDuration <
+            this._emotionExitDelay
         ) {
 
             return;
@@ -2212,4 +2255,3 @@ export class EmotionController {
         );
     }
 }
-
