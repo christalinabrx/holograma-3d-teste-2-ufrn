@@ -1734,257 +1734,311 @@ if (
             // DESENHA CABEÇA SEGMENTADA
             // =================================================
 
-            this._drawHeadSegmented(
+        // =========================================================
+// DESENHA SOMENTE A CABEÇA SEGMENTADA
+// =========================================================
 
-                ctx,
+_drawHeadSegmented(
+    ctx,
+    outputW,
+    outputH,
+    segmentationMask
+) {
 
-                w,
+    const videoW =
+        this.video.videoWidth;
 
-                h,
-
-                mask
-
-            );
+    const videoH =
+        this.video.videoHeight;
 
 
-            ctx.restore();
-        }
+    if (
+        !videoW ||
+        !videoH
+    ) {
+        return;
     }
 
 
-    // =========================================================
-    // DESENHA SOMENTE A CABEÇA SEGMENTADA
-    // =========================================================
+    // =====================================================
+    // AGUARDA DETECÇÃO FACIAL
+    // =====================================================
 
-    _drawHeadSegmented(
-        ctx,
-        outputW,
-        outputH,
-        segmentationMask
+    if (
+        !this._faceBox ||
+        !this._headFrame
+    ) {
+        return;
+    }
+
+
+    const frame =
+        this._headFrame;
+
+
+    if (
+        frame.width <= 0 ||
+        frame.height <= 0
+    ) {
+        return;
+    }
+
+
+    // =====================================================
+    // COPIA MÁSCARA MEDIAPIPE
+    // =====================================================
+
+    const maskCtx =
+        this._maskCtx;
+
+
+    maskCtx.clearRect(
+        0,
+        0,
+        videoW,
+        videoH
+    );
+
+
+    maskCtx.globalCompositeOperation =
+        'source-over';
+
+
+    maskCtx.drawImage(
+
+        segmentationMask,
+
+        0,
+        0,
+        videoW,
+        videoH
+
+    );
+
+
+    // =====================================================
+    // COPIA IMAGEM DA CÂMERA
+    // =====================================================
+
+    const personCtx =
+        this._personCtx;
+
+
+    personCtx.clearRect(
+        0,
+        0,
+        videoW,
+        videoH
+    );
+
+
+    personCtx.globalCompositeOperation =
+        'source-over';
+
+
+    personCtx.drawImage(
+
+        this.video,
+
+        0,
+        0,
+        videoW,
+        videoH
+
+    );
+
+
+    // =====================================================
+    // APLICA SEGMENTAÇÃO
+    // =====================================================
+
+    personCtx.globalCompositeOperation =
+        'destination-in';
+
+
+    personCtx.drawImage(
+        this._maskCanvas,
+
+        0,
+        0
+
+    );
+
+
+    // =====================================================
+    // LIMITA À JANELA DA CABEÇA
+    // =====================================================
+
+    personCtx.globalCompositeOperation =
+        'destination-in';
+
+
+    personCtx.fillStyle =
+        '#ffffff';
+
+
+    personCtx.fillRect(
+
+        frame.x,
+        frame.y,
+        frame.width,
+        frame.height
+
+    );
+
+
+    // =====================================================
+    // MANTÉM PROPORÇÃO
+    // =====================================================
+
+    const sourceAspect =
+        frame.width /
+        frame.height;
+
+
+    const outputAspect =
+        outputW /
+        outputH;
+
+
+    let drawWidth =
+        outputW;
+
+
+    let drawHeight =
+        outputH;
+
+
+    let drawX =
+        0;
+
+
+    let drawY =
+        0;
+
+
+    if (
+        sourceAspect >
+        outputAspect
     ) {
 
-        const videoW =
-            this.video.videoWidth;
-
-
-        const videoH =
-            this.video.videoHeight;
-
-
-        if (
-            !videoW ||
-            !videoH
-        ) {
-
-            return;
-        }
-
-
-        // =====================================================
-        // AGUARDA DETECÇÃO FACIAL
-        // =====================================================
-
-        if (
-            !this._faceBox ||
-            !this._headFrame
-        ) {
-
-            return;
-        }
-
-
-        const frame =
-            this._headFrame;
-
-
-        if (
-            frame.width <= 0 ||
-            frame.height <= 0
-        ) {
-
-            return;
-        }
-
-
-        // =====================================================
-        // COPIA MÁSCARA MEDIAPIPE
-        // =====================================================
-
-        const maskCtx =
-            this._maskCtx;
-
-
-        maskCtx.clearRect(
-            0,
-            0,
-            videoW,
-            videoH
-        );
-
-
-        maskCtx.globalCompositeOperation =
-            'source-over';
-
-
-        maskCtx.drawImage(
-
-            segmentationMask,
-
-            0,
-            0,
-            videoW,
-            videoH
-
-        );
-
-
-        // =====================================================
-        // COPIA IMAGEM DA CÂMERA
-        // =====================================================
-
-        const personCtx =
-            this._personCtx;
-
-
-        personCtx.clearRect(
-            0,
-            0,
-            videoW,
-            videoH
-        );
-
-
-        personCtx.globalCompositeOperation =
-            'source-over';
-
-
-        personCtx.drawImage(
-
-            this.video,
-
-            0,
-            0,
-            videoW,
-            videoH
-
-        );
-
-
-        // =====================================================
-        // APLICA SEGMENTAÇÃO
-        // =====================================================
-
-        personCtx.globalCompositeOperation =
-            'destination-in';
-
-
-        personCtx.drawImage(
-
-            this._maskCanvas,
-
-            0,
-            0
-
-        );
-
-
-        // =====================================================
-        // LIMITA À JANELA DA CABEÇA
-        // =====================================================
-
-        personCtx.globalCompositeOperation =
-            'destination-in';
-
-
-        personCtx.fillStyle =
-            '#ffffff';
-
-
-        personCtx.fillRect(
-
-            frame.x,
-
-            frame.y,
-
-            frame.width,
-
-            frame.height
-
-        );
-
-
-        // =====================================================
-        // MANTÉM PROPORÇÃO
-        // =====================================================
-
-        const sourceAspect =
-            frame.width /
-            frame.height;
-
-
-        const outputAspect =
-            outputW /
+        drawHeight =
             outputH;
 
 
-        let drawWidth =
+        drawWidth =
+            outputH *
+            sourceAspect;
+
+
+        drawX =
+            (
+                outputW -
+                drawWidth
+            ) / 2;
+
+    } else {
+
+        drawWidth =
             outputW;
 
 
-        let drawHeight =
-            outputH;
+        drawHeight =
+            outputW /
+            sourceAspect;
 
 
-        let drawX =
-            0;
+        drawY =
+            (
+                outputH -
+                drawHeight
+            ) / 2;
+    }
 
 
-        let drawY =
-            0;
+    // =====================================================
+    // ESCALA PARA LANDMARKS
+    // =====================================================
+
+    const scaleX =
+        drawWidth /
+        frame.width;
 
 
-        if (
-            sourceAspect >
-            outputAspect
-        ) {
-
-            drawHeight =
-                outputH;
+    const scaleY =
+        drawHeight /
+        frame.height;
 
 
-            drawWidth =
-                outputH *
-                sourceAspect;
+    // =====================================================
+    // GLITCH DO ANGRY
+    //
+    // IMPORTANTE:
+    //
+    // O glitch recebe this._personCanvas,
+    // que JÁ está segmentado.
+    //
+    // Portanto ele afeta somente a pessoa.
+    //
+    // O fundo preto NÃO recebe glitch.
+    // =====================================================
+
+    let glitchWasDrawn =
+        false;
 
 
-            drawX =
-                (
-                    outputW -
-                    drawWidth
-                ) / 2;
+    if (
+        this._angry &&
+        this._angry.emotion === 'angry'
+    ) {
 
-        } else {
+        glitchWasDrawn =
+            this._angry.drawGlitchedPerson(
 
-            drawWidth =
-                outputW;
+                ctx,
+
+                this._personCanvas,
+
+                {
+
+                    sourceX:
+                        frame.x,
+
+                    sourceY:
+                        frame.y,
+
+                    sourceWidth:
+                        frame.width,
+
+                    sourceHeight:
+                        frame.height,
+
+                    drawX:
+                        drawX,
+
+                    drawY:
+                        drawY,
+
+                    drawWidth:
+                        drawWidth,
+
+                    drawHeight:
+                        drawHeight
+
+                }
+
+            );
+    }
 
 
-            drawHeight =
-                outputW /
-                sourceAspect;
+    // =====================================================
+    // DESENHO NORMAL
+    //
+    // Se não houver glitch ativo,
+    // desenha a imagem normalmente.
+    // =====================================================
 
-
-            drawY =
-                (
-                    outputH -
-                    drawHeight
-                ) / 2;
-        }
-
-
-        // =====================================================
-        // DESENHA NO HOLOGRAMA
-        // =====================================================
+    if (!glitchWasDrawn) {
 
         ctx.drawImage(
 
@@ -2001,91 +2055,111 @@ if (
             drawHeight
 
         );
-
-
-        // =====================================================
-        // LÁGRIMAS HOLOGRÁFICAS
-        // =====================================================
-
-        if (
-            this._landmarks &&
-            this._tears
-        ) {
-
-            const scaleX =
-                drawWidth /
-                frame.width;
-
-
-            const scaleY =
-                drawHeight /
-                frame.height;
-
-
-            this._tears.draw(
-
-                ctx,
-
-                this._landmarks.positions,
-
-                {
-
-                    frameX:
-                        frame.x,
-
-                    frameY:
-                        frame.y,
-
-                    drawX:
-                        drawX,
-
-                    drawY:
-                        drawY,
-
-                    scaleX:
-                        scaleX,
-
-                    scaleY:
-                        scaleY,
-
-                    scale:
-                        (
-                            scaleX +
-                            scaleY
-                        ) / 2
-
-                }
-
-            );
-
-            // =====================================================
-// EFEITOS VISUAIS DO ANGRY
-// =====================================================
-
-if (
-    this._angry
-) {
-
-    this._angry.draw(
-        ctx,
-        {
-            drawX:
-                drawX,
-
-            drawY:
-                drawY,
-
-            drawWidth:
-                drawWidth,
-
-            drawHeight:
-                drawHeight
-        }
-    );
-}
-            
-        }
     }
+
+
+    // =====================================================
+    // LÁGRIMAS HOLOGRÁFICAS
+    //
+    // Mantidas independentes do Angry.
+    // =====================================================
+
+    if (
+        this._landmarks &&
+        this._tears
+    ) {
+
+        this._tears.draw(
+
+            ctx,
+
+            this._landmarks.positions,
+
+            {
+
+                frameX:
+                    frame.x,
+
+                frameY:
+                    frame.y,
+
+                drawX:
+                    drawX,
+
+                drawY:
+                    drawY,
+
+                scaleX:
+                    scaleX,
+
+                scaleY:
+                    scaleY,
+
+                scale:
+                    (
+                        scaleX +
+                        scaleY
+                    ) / 2
+
+            }
+
+        );
+    }
+
+
+    // =====================================================
+    // EFEITOS VISUAIS DO ANGRY
+    //
+    // Ficam FORA do bloco das lágrimas.
+    //
+    // Isso é importante para que:
+    // - laser funcione mesmo sem lágrimas
+    // - halo funcione independentemente
+    // - partículas funcionem independentemente
+    // =====================================================
+
+    if (
+        this._angry
+    ) {
+
+        this._angry.draw(
+
+            ctx,
+
+            {
+
+                drawX:
+                    drawX,
+
+                drawY:
+                    drawY,
+
+                drawWidth:
+                    drawWidth,
+
+                drawHeight:
+                    drawHeight,
+
+                frameX:
+                    frame.x,
+
+                frameY:
+                    frame.y,
+
+                scaleX:
+                    scaleX,
+
+                scaleY:
+                    scaleY,
+
+                landmarks:
+                    this._landmarks
+
+            }
+
+        );
+    }
+}
 
 
     // =========================================================
