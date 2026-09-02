@@ -139,26 +139,40 @@ export class EmotionController {
 
 
         // =====================================================
-        // NOVA PROTEÇÃO DE ESTABILIDADE
+        // PROTEÇÃO ESPECIAL DO ESTADO NEUTRO
         // =====================================================
 
         /*
-         * Depois que uma emoção está ativa, uma nova emoção
-         * precisa permanecer estável durante este período
-         * antes de substituir a emoção atual.
+         * O retorno para NEUTRO possui uma proteção maior.
          *
-         * Isso evita principalmente:
+         * Quando uma expressão está ativa e o usuário relaxa
+         * o rosto, o face-api pode detectar NEUTRO rapidamente.
          *
-         * FELIZ -> NEUTRO
+         * Para evitar que o holograma volte imediatamente para
+         * NEUTRO, exigimos que NEUTRO permaneça como candidata
+         * durante 3 segundos.
          *
-         * imediatamente após desfazer o sorriso.
+         * IMPORTANTE:
          *
-         * A detecção continua acontecendo normalmente,
-         * mas a mudança visual/emocional é retardada.
+         * Essa proteção NÃO é aplicada às outras emoções.
+         *
+         * Portanto:
+         *
+         * FELIZ -> TRISTE
+         * FELIZ -> RAIVA
+         * TRISTE -> FELIZ
+         * RAIVA -> SURPRESO
+         *
+         * continuam obedecendo apenas aos tempos normais de
+         * estabilização.
          */
 
-        this._emotionExitDelay = 3000;
+        this._neutralExitDelay = 3000;
 
+
+        // =====================================================
+        // MOMENTOS DE CONTROLE
+        // =====================================================
 
         // Momento em que a emoção atual foi confirmada.
 
@@ -1401,8 +1415,8 @@ export class EmotionController {
              * A emoção atual voltou a ser dominante.
              *
              * Portanto cancelamos imediatamente a candidata.
-             * Isso é importante para evitar que uma pequena
-             * oscilação do face-api.js provoque uma mudança.
+             * Isso evita que uma pequena oscilação do
+             * face-api.js provoque uma mudança.
              */
 
             this._candidateEmotion =
@@ -1483,37 +1497,38 @@ export class EmotionController {
 
 
         // =====================================================
-        // NOVA PROTEÇÃO — 3 SEGUNDOS
+        // PROTEÇÃO ESPECIAL — SOMENTE PARA NEUTRO
         // =====================================================
 
         /*
-         * Aqui está a principal alteração.
+         * IMPORTANTE:
          *
-         * A nova emoção precisa permanecer candidata durante
-         * pelo menos 3 segundos antes de substituir a emoção
-         * que está atualmente ativa.
+         * Os 3 segundos são aplicados SOMENTE quando a nova
+         * emoção candidata é NEUTRO.
          *
-         * Exemplo:
+         * Assim:
          *
-         * FELIZ
-         *   ↓
-         * usuário desfaz o sorriso
-         *   ↓
-         * face-api detecta NEUTRAL
-         *   ↓
-         * NEUTRAL vira candidata
-         *   ↓
-         * espera 3 segundos
-         *   ↓
-         * NEUTRAL é confirmada
+         * FELIZ -> NEUTRO
+         * TRISTE -> NEUTRO
+         * RAIVA -> NEUTRO
          *
-         * Se o usuário voltar a sorrir antes dos 3 segundos,
-         * a candidata NEUTRAL é cancelada.
+         * precisam de 3 segundos de estabilidade.
+         *
+         * Já:
+         *
+         * FELIZ -> TRISTE
+         * FELIZ -> RAIVA
+         * TRISTE -> FELIZ
+         * RAIVA -> SURPRESO
+         *
+         * continuam usando apenas o tempo normal de
+         * transição.
          */
 
         if (
+            dominantEmotion === 'neutral' &&
             candidateDuration <
-            this._emotionExitDelay
+            this._neutralExitDelay
         ) {
 
             return;
