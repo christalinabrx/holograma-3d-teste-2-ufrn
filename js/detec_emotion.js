@@ -1731,10 +1731,30 @@ if (
 
 
             // =================================================
-            // DESENHA CABEÇA SEGMENTADA
-            // =================================================
+// DESENHA CABEÇA SEGMENTADA
+// =================================================
 
-        // =========================================================
+this._drawHeadSegmented(
+
+    ctx,
+
+    w,
+
+    h,
+
+    mask
+
+);
+
+
+ctx.restore();
+
+}
+
+}
+
+
+// =========================================================
 // DESENHA SOMENTE A CABEÇA SEGMENTADA
 // =========================================================
 
@@ -1748,6 +1768,7 @@ _drawHeadSegmented(
     const videoW =
         this.video.videoWidth;
 
+
     const videoH =
         this.video.videoHeight;
 
@@ -1756,6 +1777,7 @@ _drawHeadSegmented(
         !videoW ||
         !videoH
     ) {
+
         return;
     }
 
@@ -1768,6 +1790,7 @@ _drawHeadSegmented(
         !this._faceBox ||
         !this._headFrame
     ) {
+
         return;
     }
 
@@ -1780,6 +1803,7 @@ _drawHeadSegmented(
         frame.width <= 0 ||
         frame.height <= 0
     ) {
+
         return;
     }
 
@@ -1857,6 +1881,7 @@ _drawHeadSegmented(
 
 
     personCtx.drawImage(
+
         this._maskCanvas,
 
         0,
@@ -1880,8 +1905,11 @@ _drawHeadSegmented(
     personCtx.fillRect(
 
         frame.x,
+
         frame.y,
+
         frame.width,
+
         frame.height
 
     );
@@ -1957,117 +1985,53 @@ _drawHeadSegmented(
 
 
     // =====================================================
-    // ESCALA PARA LANDMARKS
-    // =====================================================
-
-    const scaleX =
-        drawWidth /
-        frame.width;
-
-
-    const scaleY =
-        drawHeight /
-        frame.height;
-
-
-    // =====================================================
-    // GLITCH DO ANGRY
+    // DESENHA PESSOA
     //
     // IMPORTANTE:
+    // Voltamos aqui ao desenho normal.
     //
-    // O glitch recebe this._personCanvas,
-    // que JÁ está segmentado.
+    // Primeiro vamos garantir que o sistema volte
+    // a funcionar sem erro de sintaxe.
     //
-    // Portanto ele afeta somente a pessoa.
-    //
-    // O fundo preto NÃO recebe glitch.
+    // Depois implementamos o glitch diretamente
+    // no AngryEffects, sem alterar esta estrutura.
     // =====================================================
 
-    let glitchWasDrawn =
-        false;
+    ctx.drawImage(
 
+        this._personCanvas,
 
-    if (
-        this._angry &&
-        this._angry.emotion === 'angry'
-    ) {
+        frame.x,
+        frame.y,
+        frame.width,
+        frame.height,
 
-        glitchWasDrawn =
-            this._angry.drawGlitchedPerson(
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight
 
-                ctx,
-
-                this._personCanvas,
-
-                {
-
-                    sourceX:
-                        frame.x,
-
-                    sourceY:
-                        frame.y,
-
-                    sourceWidth:
-                        frame.width,
-
-                    sourceHeight:
-                        frame.height,
-
-                    drawX:
-                        drawX,
-
-                    drawY:
-                        drawY,
-
-                    drawWidth:
-                        drawWidth,
-
-                    drawHeight:
-                        drawHeight
-
-                }
-
-            );
-    }
-
-
-    // =====================================================
-    // DESENHO NORMAL
-    //
-    // Se não houver glitch ativo,
-    // desenha a imagem normalmente.
-    // =====================================================
-
-    if (!glitchWasDrawn) {
-
-        ctx.drawImage(
-
-            this._personCanvas,
-
-            frame.x,
-            frame.y,
-            frame.width,
-            frame.height,
-
-            drawX,
-            drawY,
-            drawWidth,
-            drawHeight
-
-        );
-    }
+    );
 
 
     // =====================================================
     // LÁGRIMAS HOLOGRÁFICAS
-    //
-    // Mantidas independentes do Angry.
     // =====================================================
 
     if (
         this._landmarks &&
         this._tears
     ) {
+
+        const scaleX =
+            drawWidth /
+            frame.width;
+
+
+        const scaleY =
+            drawHeight /
+            frame.height;
+
 
         this._tears.draw(
 
@@ -2109,13 +2073,6 @@ _drawHeadSegmented(
 
     // =====================================================
     // EFEITOS VISUAIS DO ANGRY
-    //
-    // Ficam FORA do bloco das lágrimas.
-    //
-    // Isso é importante para que:
-    // - laser funcione mesmo sem lágrimas
-    // - halo funcione independentemente
-    // - partículas funcionem independentemente
     // =====================================================
 
     if (
@@ -2147,10 +2104,12 @@ _drawHeadSegmented(
                     frame.y,
 
                 scaleX:
-                    scaleX,
+                    drawWidth /
+                    frame.width,
 
                 scaleY:
-                    scaleY,
+                    drawHeight /
+                    frame.height,
 
                 landmarks:
                     this._landmarks
@@ -2159,8 +2118,116 @@ _drawHeadSegmented(
 
         );
     }
+
 }
 
+
+// =========================================================
+// CONTROLES
+// =========================================================
+
+setLandmarksVisible(
+    visible
+) {
+
+    this.showLandmarks =
+        Boolean(visible);
+}
+
+
+setCarouselMode(
+    enabled
+) {
+
+    this.carouselMode =
+        Boolean(enabled);
+}
+
+
+// =========================================================
+// PARA DETECÇÃO
+// =========================================================
+
+stop() {
+
+    this.active =
+        false;
+
+
+    this._sendingFrame =
+        false;
+
+
+    this._detectingFace =
+        false;
+
+
+    this._segmentationMask =
+        null;
+
+
+    this._lastValidMask =
+        null;
+
+
+    this._segmentationReady =
+        false;
+
+
+    this._faceBox =
+        null;
+
+
+    this._smoothFaceBox =
+        null;
+
+
+    this._landmarks =
+        null;
+
+
+    this._headFrame =
+        null;
+
+
+    this._headFrameInitialized =
+        false;
+
+
+    // =====================================================
+    // RESET EMOÇÕES
+    // =====================================================
+
+    this._emotionHistory =
+        [];
+
+
+    this._lastEmotion =
+        null;
+
+
+    this._candidateEmotion =
+        null;
+
+
+    this._candidateEmotionCount =
+        0;
+
+
+    this._emotionStartTime =
+        0;
+
+
+    this._candidateStartTime =
+        0;
+
+
+    console.log(
+        'EmotionController parado.'
+    );
+}
+
+}
 
     // =========================================================
     // CONTROLES
