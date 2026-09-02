@@ -2201,33 +2201,70 @@ export class EmotionController {
         // EFEITOS ANGRY
         // =====================================================
 
-        if (
-            this._angryEffects
-        ) {
+        // =====================================================
+// EFEITOS ANGRY
+// =====================================================
+//
+// O AngryEffects recebe também o canvas da pessoa
+// segmentada. Isso permite que o glitch utilize
+// pedaços reais da imagem da cabeça.
+//
+// Não são mais desenhadas linhas artificiais.
+// O próprio conteúdo da câmera é fragmentado.
+// =====================================================
 
-            this._angryEffects.draw(
+if (
+    this._angryEffects
+) {
 
-                ctx,
+    this._angryEffects.draw(
 
-                {
+        ctx,
 
-                    drawX:
-                        drawX,
+        {
 
-                    drawY:
-                        drawY,
+            drawX:
+                drawX,
 
-                    drawWidth:
-                        drawWidth,
+            drawY:
+                drawY,
 
-                    drawHeight:
-                        drawHeight
+            drawWidth:
+                drawWidth,
 
-                }
+            drawHeight:
+                drawHeight,
 
-            );
+
+            // ---------------------------------------------
+            // IMAGEM REAL DA PESSOA SEGMENTADA
+            // ---------------------------------------------
+
+            personCanvas:
+                this._personCanvas,
+
+
+            // ---------------------------------------------
+            // REGIÃO ORIGINAL DA CABEÇA
+            // ---------------------------------------------
+
+            sourceX:
+                frame.x,
+
+            sourceY:
+                frame.y,
+
+            sourceWidth:
+                frame.width,
+
+            sourceHeight:
+                frame.height
 
         }
+
+    );
+
+}
     }
 
 
