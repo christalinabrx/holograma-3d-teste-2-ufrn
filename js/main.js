@@ -1,487 +1,610 @@
-const CONFIG = {
-    MODELS:
-        'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'
-};
+import { HolographicTears } from './holographic_tears.js';
+import { AngryEffects } from './angry_effects.js';
 
+export class EmotionController {
 
-// ============================================================
-// ÁUDIO
-// ============================================================
+    constructor() {
 
-const AUDIO_MAP = {
+        // =====================================================
+        // ESTADO GERAL
+        // =====================================================
 
-    happy:
-        'assets/audio/Holograma3D_Feliz.mp3',
+        this.onEmotionChange = null;
 
-    sad:
-        'assets/audio/Holograma3D_Triste.mp3',
+        this.active = false;
 
-    angry:
-        'assets/audio/Holograma3D_Raiva.mp3',
+        this.video = null;
 
-    disgusted:
-        'assets/audio/Holograma3D_Nojo.mp3',
+        this.canvases = {};
 
-    surprised:
-        'assets/audio/Holograma3D_Surpresa.mp3',
 
-    fearful:
-        'assets/audio/Holograma3D_Triste.mp3',
+        // =====================================================
+        // FACE API
+        // =====================================================
 
-    neutral:
-        'assets/audio/Holograma3D_Neutro.mp3',
+        this._faceBox = null;
 
-    /*
-     * Mantido no mapa por compatibilidade,
-     * mas NÃO é usado como trilha principal
-     * do carrossel.
-     *
-     * No carrossel, o áudio é determinado
-     * pela emoção que está em videoTop.
-     */
-    carousel:
-        'assets/audio/Holograma3D_Carrossel.mp3'
-};
+        this._smoothFaceBox = null;
 
+        this._faceSmoothing = 0.75;
 
-const FADE_DURATION = 1000;
+        this._landmarks = null;
 
-const FACE_IDS = [
-    'videoTop',
-    'videoLeft',
-    'videoRight',
-    'videoBottom'
-];
+        this.showLandmarks = false;
 
 
-// ============================================================
-// ESTADO GLOBAL
-// ============================================================
+        // =====================================================
+        // SISTEMA PROCEDURAL DE LÁGRIMAS
+        // =====================================================
 
-let hCtrl = null;
-let eCtrl = null;
+        this._tears =
+            new HolographicTears();
 
-let carouselActive = false;
-let landmarksActive = false;
 
-let currentAudio = null;
-let currentEmotion = null;
+        // =====================================================
+        // SISTEMA PROCEDURAL DE EFEITOS — ANGRY
+        // =====================================================
 
-/*
- * Geração do sistema de áudio.
- *
- * Cada troca de áudio invalida os fades anteriores.
- * Isso impede que vários requestAnimationFrame()
- * antigos continuem alterando o volume do áudio atual.
- */
-let audioGeneration = 0;
+        this._angryEffects =
+            new AngryEffects();
 
-let systemStarted = false;
-let startInProgress = false;
 
-let cameraStream = null;
-let hiddenVideo = null;
+        // =====================================================
+        // MODO CARROSSEL
+        // =====================================================
 
+        this.carouselMode = false;
 
-// ============================================================
-// UTILITÁRIOS DE ÁUDIO
-// ============================================================
 
-function clampVolume(value) {
+        // =====================================================
+        // CONTROLE DE DETECÇÃO
+        // =====================================================
 
-    const number = Number(value);
+        this._detectingFace = false;
 
-    if (!Number.isFinite(number)) {
-        return 0;
-    }
+        this._lastFaceDetectionTime = 0;
 
-    return Math.max(
-        0,
-        Math.min(1, number)
-    );
-}
+        this._faceDetectionInterval = 80;
 
+        this._faceOptions = null;
 
-function setAudioVolume(audio, value) {
 
-    if (!audio) {
-        return;
-    }
+        // =====================================================
+        // ENQUADRAMENTO ESTÁVEL DA CABEÇA
+        // =====================================================
 
-    try {
+        this._headFrame = null;
 
-        audio.volume =
-            clampVolume(value);
+        this._headFrameInitialized = false;
 
-    } catch (error) {
+        this._headFrameWidthFactor = 2.8;
 
-        console.warn(
-            'Não foi possível ajustar volume:',
-            error
-        );
-    }
-}
+        this._headFrameHeightFactor = 3.4;
 
+        this._headFrameVerticalPosition = 0.56;
 
-function invalidateAudioFades() {
+        this._headFrameSmoothing = 0.92;
 
-    audioGeneration++;
 
-    return audioGeneration;
-}
+        // =====================================================
+        // ESTABILIZAÇÃO TEMPORAL DAS EMOÇÕES
+        // =====================================================
 
+        this._lastEmotion = null;
 
-// ============================================================
-// INIT
-// ============================================================
+        this._candidateEmotion = null;
 
-async function init() {
+        this._candidateEmotionCount = 0;
 
-    try {
+        this._emotionHistory = [];
 
-        const progress =
-            document.getElementById(
-                'loadingProgress'
-            );
+        this._emotionHistorySize = 4;
 
 
-        // ====================================================
-        // TINY FACE DETECTOR
-        // ====================================================
+        // =====================================================
+        // CONFIGURAÇÃO DAS EMOÇÕES
+        // =====================================================
 
-        console.log(
-            'Carregando TinyFaceDetector...'
-        );
+        this._emotionMinConfidence = 0.35;
 
-        await faceapi.nets
-            .tinyFaceDetector
-            .loadFromUri(
-                CONFIG.MODELS
-            );
+        this._emotionMinConfidenceByType = {
 
+            sad: 0.22
 
-        if (progress) {
-            progress.style.width =
-                '33%';
-        }
+        };
 
-        console.log(
-            'TinyFaceDetector carregado.'
-        );
 
+        // =====================================================
+        // FRAMES NECESSÁRIOS PARA CONFIRMAR
+        // =====================================================
 
-        // ====================================================
-        // EXPRESSÕES
-        // ====================================================
+        this._emotionRequiredFrames = 2;
 
-        console.log(
-            'Carregando FaceExpressionNet...'
-        );
+        this._emotionRequiredFramesByType = {
 
-        await faceapi.nets
-            .faceExpressionNet
-            .loadFromUri(
-                CONFIG.MODELS
-            );
+            sad: 3
 
+        };
 
-        if (progress) {
-            progress.style.width =
-                '66%';
-        }
 
-        console.log(
-            'FaceExpressionNet carregado.'
-        );
+        // =====================================================
+        // TEMPO MÍNIMO DE PERMANÊNCIA
+        // =====================================================
 
+        this._emotionMinimumDuration = 2200;
 
-        // ====================================================
-        // LANDMARKS
-        // ====================================================
 
-        console.log(
-            'Carregando FaceLandmark68TinyNet...'
-        );
+        // =====================================================
+        // TEMPO DE TRANSIÇÃO
+        // =====================================================
 
-        await faceapi.nets
-            .faceLandmark68TinyNet
-            .loadFromUri(
-                CONFIG.MODELS
-            );
+        this._emotionTransitionDuration = 300;
 
+        this._emotionTransitionDurationByType = {
 
-        if (progress) {
-            progress.style.width =
-                '100%';
-        }
+            sad: 500
 
-        console.log(
-            'FaceLandmark68TinyNet carregado.'
-        );
+        };
 
 
-        // ====================================================
-        // CÂMERAS
-        // ====================================================
+        // =====================================================
+        // PROTEÇÃO ESPECIAL DO ESTADO NEUTRO
+        // =====================================================
 
-        const devices =
-            await navigator
-                .mediaDevices
-                .enumerateDevices();
+        /*
+         * O retorno para NEUTRO possui uma proteção maior.
+         *
+         * Quando uma expressão está ativa e o usuário relaxa
+         * o rosto, o face-api pode detectar NEUTRO rapidamente.
+         *
+         * Para evitar que o holograma volte imediatamente para
+         * NEUTRO, exigimos que NEUTRO permaneça como candidata
+         * durante 3 segundos.
+         *
+         * IMPORTANTE:
+         *
+         * Essa proteção NÃO é aplicada às outras emoções.
+         */
 
+        this._neutralExitDelay = 3000;
 
-        const videos =
-            devices.filter(
-                device =>
-                    device.kind ===
-                    'videoinput'
-            );
 
+        // =====================================================
+        // MOMENTOS DE CONTROLE
+        // =====================================================
 
-        const select =
-            document.getElementById(
-                'cameraSelect'
-            );
+        this._emotionStartTime = 0;
 
+        this._candidateStartTime = 0;
 
-        if (select) {
 
-            select.innerHTML =
-                videos.map(
-                    device =>
-                        `<option value="${device.deviceId}">
-                            ${device.label || 'Câmera'}
-                        </option>`
-                ).join('');
+        // =====================================================
+        // MEDIAPIPE
+        // =====================================================
 
+        this._segmentation = null;
 
-            select.disabled = false;
-        }
+        this._segmentationMask = null;
 
+        this._segmentationImage = null;
 
-        const startBtn =
-            document.getElementById(
-                'startBtn'
-            );
+        this._lastValidMask = null;
 
+        this._lastMaskTime = 0;
 
-        if (startBtn) {
-            startBtn.disabled = false;
-        }
+        this._segmentationReady = false;
 
+        this._sendingFrame = false;
 
-        const loadingScreen =
-            document.getElementById(
-                'loadingScreen'
-            );
 
+        // =====================================================
+        // CANVAS DA MÁSCARA
+        // =====================================================
 
-        if (loadingScreen) {
-            loadingScreen.style.display =
-                'none';
-        }
+        this._maskCanvas =
+            document.createElement('canvas');
 
+        this._maskCtx =
+            this._maskCanvas.getContext('2d');
 
-        updateStatus(
-            'Pronto para iniciar',
-            'success'
-        );
 
+        // =====================================================
+        // CANVAS DA PESSOA
+        // =====================================================
 
-        console.log(
-            'Inicialização concluída.'
-        );
+        this._personCanvas =
+            document.createElement('canvas');
 
+        this._personCtx =
+            this._personCanvas.getContext('2d');
 
-    } catch (error) {
 
-        console.error(
-            'Erro ao carregar modelos:',
-            error
-        );
+        // =====================================================
+        // LOOP VISUAL
+        // =====================================================
 
+        this._lastRenderTime =
+            performance.now();
 
-        updateStatus(
-            'Erro ao carregar modelos',
-            'danger'
-        );
-    }
-}
 
-
-// ============================================================
-// START
-// ============================================================
-
-async function start() {
-
-    /*
-     * Evita clicar em START várias vezes.
-     */
-    if (startInProgress) {
-
-        console.log(
-            'Inicialização já está em andamento.'
-        );
-
-        return;
+        this._renderLoop();
     }
 
 
-    /*
-     * Se o sistema já está funcionando,
-     * não cria outra câmera nem tenta recriar
-     * os canvases.
-     */
-    if (
-        systemStarted &&
-        eCtrl &&
-        hCtrl
-    ) {
+    // =========================================================
+    // INICIALIZA MEDIAPIPE
+    // =========================================================
 
-        console.log(
-            'Holograma já está em execução. START ignorado.'
-        );
+    async _initSegmentation() {
 
-        updateStatus(
-            'Holograma Online',
-            'success'
-        );
-
-        return;
-    }
-
-
-    startInProgress = true;
-
-
-    try {
-
-        // ====================================================
-        // BOTÃO
-        // ====================================================
-
-        const startBtn =
-            document.getElementById(
-                'startBtn'
-            );
-
-
-        if (startBtn) {
-            startBtn.disabled = true;
+        if (this._segmentation) {
+            return;
         }
 
 
-        // ====================================================
-        // CÂMERA SELECIONADA
-        // ====================================================
+        if (
+            typeof SelfieSegmentation ===
+            'undefined'
+        ) {
 
-        const select =
-            document.getElementById(
-                'cameraSelect'
+            throw new Error(
+                'SelfieSegmentation não foi carregado. ' +
+                'Verifique o index.html.'
             );
-
-
-        const id =
-            select
-                ? select.value
-                : '';
+        }
 
 
         console.log(
-            'Iniciando câmera...'
+            'Inicializando MediaPipe Selfie Segmentation...'
         );
 
 
-        // ====================================================
-        // GET USER MEDIA
-        // ====================================================
+        this._segmentation =
+            new SelfieSegmentation({
 
-        cameraStream =
-            await navigator
-                .mediaDevices
-                .getUserMedia({
+                locateFile: (file) => {
 
-                    video: {
+                    return (
+                        'https://cdn.jsdelivr.net/npm/' +
+                        '@mediapipe/selfie_segmentation@0.1/' +
+                        file
+                    );
+                }
 
-                        deviceId:
-                            id
-                                ? {
-                                    exact: id
-                                }
-                                : undefined
-                    }
-
-                });
+            });
 
 
-        console.log(
-            'getUserMedia OK.'
-        );
+        this._segmentation.setOptions({
+
+            modelSelection: 1
+
+        });
 
 
-        // ====================================================
-        // VÍDEO OCULTO ÚNICO
-        // ====================================================
-
-        hiddenVideo =
-            document.createElement(
-                'video'
-            );
-
-
-        hiddenVideo.srcObject =
-            cameraStream;
-
-
-        hiddenVideo.muted =
-            true;
-
-
-        hiddenVideo.autoplay =
-            true;
-
-
-        hiddenVideo.playsInline =
-            true;
-
-
-        hiddenVideo.style.display =
-            'none';
-
-
-        document.body.appendChild(
-            hiddenVideo
-        );
-
-
-        await hiddenVideo.play();
-
-
-        // ====================================================
-        // ESPERA DIMENSÕES DA CÂMERA
-        // ====================================================
-
-        await new Promise(
-            resolve => {
+        this._segmentation.onResults(
+            (results) => {
 
                 if (
-                    hiddenVideo.videoWidth > 0 &&
-                    hiddenVideo.videoHeight > 0
+                    !results ||
+                    !results.segmentationMask
                 ) {
-
-                    resolve();
 
                     return;
                 }
 
 
+                this._segmentationMask =
+                    results.segmentationMask;
+
+
+                this._segmentationImage =
+                    results.image;
+
+
+                this._lastValidMask =
+                    results.segmentationMask;
+
+
+                this._lastMaskTime =
+                    performance.now();
+
+
+                this._segmentationReady =
+                    true;
+            }
+        );
+
+
+        console.log(
+            'MediaPipe Selfie Segmentation inicializado.'
+        );
+    }
+
+
+    // =========================================================
+    // INICIA DETECÇÃO
+    // =========================================================
+
+    async startDetection(
+        stream,
+        existingVideo = null
+    ) {
+
+        if (this.active) {
+
+            console.warn(
+                'Detecção já estava ativa.'
+            );
+
+            return;
+        }
+
+
+        // =====================================================
+        // USA O VÍDEO EXISTENTE
+        // =====================================================
+
+        if (existingVideo) {
+
+            this.video =
+                existingVideo;
+
+        } else {
+
+            this.video =
+                document.createElement('video');
+
+
+            this.video.srcObject =
+                stream;
+
+
+            this.video.muted =
+                true;
+
+
+            this.video.autoplay =
+                true;
+
+
+            this.video.playsInline =
+                true;
+
+
+            await this.video.play();
+        }
+
+
+        // =====================================================
+        // ESPERA A CÂMERA ESTAR PRONTA
+        // =====================================================
+
+        await this._waitForVideo();
+
+
+        const width =
+            this.video.videoWidth;
+
+
+        const height =
+            this.video.videoHeight;
+
+
+        console.log(
+            `Câmera pronta: ${width}x${height}`
+        );
+
+
+        // =====================================================
+        // CONFIGURA CANVAS
+        // =====================================================
+
+        this._maskCanvas.width =
+            width;
+
+
+        this._maskCanvas.height =
+            height;
+
+
+        this._personCanvas.width =
+            width;
+
+
+        this._personCanvas.height =
+            height;
+
+
+        // =====================================================
+        // VERIFICA FACE API
+        // =====================================================
+
+        if (
+            typeof faceapi ===
+            'undefined'
+        ) {
+
+            throw new Error(
+                'face-api.js não foi carregado.'
+            );
+        }
+
+
+        // =====================================================
+        // CONFIGURA DETECTOR FACIAL
+        // =====================================================
+
+        this._faceOptions =
+            new faceapi.TinyFaceDetectorOptions({
+
+                inputSize: 416,
+
+                scoreThreshold: 0.20
+
+            });
+
+
+        // =====================================================
+        // MEDIAPIPE
+        // =====================================================
+
+        await this._initSegmentation();
+
+
+        // =====================================================
+        // LIMPA ESTADOS ANTERIORES
+        // =====================================================
+
+        this._segmentationMask =
+            null;
+
+
+        this._segmentationImage =
+            null;
+
+
+        this._lastValidMask =
+            null;
+
+
+        this._segmentationReady =
+            false;
+
+
+        this._smoothFaceBox =
+            null;
+
+
+        this._faceBox =
+            null;
+
+
+        this._landmarks =
+            null;
+
+
+        this._headFrame =
+            null;
+
+
+        this._headFrameInitialized =
+            false;
+
+
+        // =====================================================
+        // RESET EMOÇÕES
+        // =====================================================
+
+        this._emotionHistory =
+            [];
+
+
+        this._lastEmotion =
+            null;
+
+
+        this._candidateEmotion =
+            null;
+
+
+        this._candidateEmotionCount =
+            0;
+
+
+        this._emotionStartTime =
+            0;
+
+
+        this._candidateStartTime =
+            0;
+
+
+        this._lastFaceDetectionTime =
+            0;
+
+
+        // =====================================================
+        // RESET EFEITO ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                'neutral',
+                0
+            );
+
+        }
+
+
+        // =====================================================
+        // RESET TEMPO DO LOOP VISUAL
+        // =====================================================
+
+        this._lastRenderTime =
+            performance.now();
+
+
+        // =====================================================
+        // ATIVA
+        // =====================================================
+
+        this.active =
+            true;
+
+
+        console.log(
+            'EmotionController ativo.'
+        );
+
+
+        // =====================================================
+        // INICIA PROCESSAMENTOS
+        // =====================================================
+
+        this._segmentationLoop();
+
+        this._faceLoop();
+    }
+
+
+    // =========================================================
+    // ESPERA O VÍDEO
+    // =========================================================
+
+    async _waitForVideo() {
+
+        if (
+            this.video &&
+            this.video.videoWidth > 0 &&
+            this.video.videoHeight > 0
+        ) {
+
+            return;
+        }
+
+
+        await new Promise(
+            (resolve) => {
+
                 const check =
                     () => {
 
+                        if (!this.video) {
+
+                            requestAnimationFrame(
+                                check
+                            );
+
+                            return;
+                        }
+
+
                         if (
-                            hiddenVideo.videoWidth > 0 &&
-                            hiddenVideo.videoHeight > 0
+                            this.video.videoWidth > 0 &&
+                            this.video.videoHeight > 0
                         ) {
 
                             resolve();
@@ -499,1229 +622,1651 @@ async function start() {
                 check();
             }
         );
+    }
 
 
-        console.log(
-            `Vídeo da câmera pronto: ${
-                hiddenVideo.videoWidth
-            }x${
-                hiddenVideo.videoHeight
-            }`
-        );
+    // =========================================================
+    // LOOP MEDIAPIPE
+    // =========================================================
 
+    async _segmentationLoop() {
 
-        // ====================================================
-        // IMPORTA CONTROLADORES
-        // ====================================================
-
-        const {
-            EmotionController
-        } =
-            await import(
-                './detec_emotion.js'
-            );
-
-
-        const {
-            HologramController
-        } =
-            await import(
-                './control_holo.js'
-            );
-
-
-        // ====================================================
-        // CRIA CONTROLADORES
-        // ====================================================
-
-        hCtrl =
-            new HologramController();
-
-
-        eCtrl =
-            new EmotionController();
-
-
-        console.log(
-            'EmotionController:',
-            eCtrl
-        );
-
-
-        console.log(
-            'HologramController:',
-            hCtrl
-        );
-
-
-        // ====================================================
-        // CONFIGURA OS QUATRO CANVASES
-        // ====================================================
-
-        FACE_IDS.forEach(
-            faceId => {
-
-                /*
-                 * PRIMEIRO procura o canvas.
-                 *
-                 * Isso é importante porque depois da primeira
-                 * inicialização os elementos videoTop etc.
-                 * já não existem mais.
-                 */
-                let canvas =
-                    document.getElementById(
-                        faceId +
-                        '_canvas'
-                    );
-
-
-                /*
-                 * Se o canvas ainda não existe,
-                 * procura o elemento original.
-                 */
-                if (!canvas) {
-
-                    const videoEl =
-                        document.getElementById(
-                            faceId
-                        );
-
-
-                    if (!videoEl) {
-
-                        console.warn(
-                            `Elemento ${faceId} não encontrado.`
-                        );
-
-                        return;
-                    }
-
-
-                    canvas =
-                        document.createElement(
-                            'canvas'
-                        );
-
-
-                    canvas.width =
-                        300;
-
-
-                    canvas.height =
-                        300;
-
-
-                    canvas.id =
-                        faceId +
-                        '_canvas';
-
-
-                    /*
-                     * Preserva a aparência original
-                     * do elemento.
-                     */
-                    canvas.style.cssText =
-                        videoEl.style.cssText;
-
-
-                    canvas.className =
-                        videoEl.className;
-
-
-                    videoEl.parentNode
-                        .replaceChild(
-                            canvas,
-                            videoEl
-                        );
-                }
-
-
-                /*
-                 * Registra o canvas no EmotionController.
-                 */
-                eCtrl.registerCanvas(
-                    faceId,
-                    canvas,
-                    hiddenVideo
-                );
-            }
-        );
-
-
-        // ====================================================
-        // CALLBACK DO CARROSSEL
-        // ====================================================
-
-        hCtrl._onCarouselChange =
-            (
-                faceEmotions,
-                inEmotion,
-                outEmotion,
-                direction
-            ) => {
-
-
-                // ============================================
-                // WIDGET INFINITO
-                // ============================================
-
-                updateInfinityWidget(
-                    faceEmotions,
-                    inEmotion,
-                    outEmotion,
-                    direction
-                );
-
-
-                // ============================================
-                // LABELS
-                // ============================================
-
-                updateCarouselLabels(
-                    faceEmotions
-                );
-
-
-                // ============================================
-                // ÁUDIO DO CARROSSEL
-                // ============================================
-
-                /*
-                 * ESTA É A REGRA IMPORTANTE:
-                 *
-                 * O áudio do carrossel é determinado
-                 * pela expressão que está atualmente
-                 * no holograma superior (videoTop).
-                 */
-                if (
-                    carouselActive
-                ) {
-
-                    const topFace =
-                        faceEmotions.find(
-                            item =>
-                                item.face ===
-                                'videoTop'
-                        );
-
-
-                    if (
-                        topFace &&
-                        topFace.emotion
-                    ) {
-
-                        console.log(
-                            'Carrossel — expressão no topo:',
-                            topFace.emotion
-                        );
-
-
-                        playEmotionAudio(
-                            topFace.emotion
-                        );
-                    }
-                }
-            };
-
-
-        // ====================================================
-        // CALLBACK DE EMOÇÃO
-        // ====================================================
-
-        eCtrl.onEmotionChange =
-            (
-                emotion,
-                confidence
-            ) => {
-
-
-                console.log(
-                    'MAIN recebeu emoção:',
-                    emotion,
-                    confidence
-                );
-
-
-                /*
-                 * No carrossel, a IA continua funcionando,
-                 * mas NÃO pode substituir a expressão
-                 * controlada pelo carrossel.
-                 */
-                if (
-                    carouselActive
-                ) {
-
-                    return;
-                }
-
-
-                // ============================================
-                // NOME DA EXPRESSÃO
-                // ============================================
-
-                const expressionName =
-                    document.getElementById(
-                        'expressionName'
-                    );
-
-
-                if (expressionName) {
-
-                    expressionName.innerText =
-                        emotion.toUpperCase();
-                }
-
-
-                // ============================================
-                // CONFIANÇA
-                // ============================================
-
-                const confidenceFill =
-                    document.getElementById(
-                        'confidenceFill'
-                    );
-
-
-                if (confidenceFill) {
-
-                    const safeConfidence =
-                        Math.max(
-                            0,
-                            Math.min(
-                                1,
-                                Number(confidence) || 0
-                            )
-                        );
-
-
-                    confidenceFill.style.width =
-                        (
-                            safeConfidence *
-                            100
-                        ) + '%';
-                }
-
-
-                // ============================================
-                // FILTRO
-                // ============================================
-
-                if (hCtrl) {
-
-                    hCtrl.applyEmotionFilter(
-                        emotion,
-                        confidence
-                    );
-                }
-
-
-                // ============================================
-                // ÁUDIO
-                // ============================================
-
-                playEmotionAudio(
-                    emotion
-                );
-            };
-
-
-        // ====================================================
-        // INICIA DETECÇÃO
-        // ====================================================
-
-        console.log(
-            'Iniciando detecção...'
-        );
-
-
-        console.log(
-            'DEBUG eCtrl =',
-            eCtrl
-        );
-
-
-        console.log(
-            'DEBUG startDetection =',
-            eCtrl?.startDetection
-        );
-
-
-        /*
-         * Marca como iniciado ANTES do startDetection.
-         *
-         * O startDetection inicia os loops internos e pode
-         * retornar depois. Isso impede que um segundo clique
-         * abra outra câmera nesse intervalo.
-         */
-        systemStarted = true;
-
-
-        await eCtrl.startDetection(
-            cameraStream,
-            hiddenVideo
-        );
-
-
-        // ====================================================
-        // UI
-        // ====================================================
-
-        const carouselBtn =
-            document.getElementById(
-                'carouselToggleBtn'
-            );
-
-
-        if (carouselBtn) {
-            carouselBtn.disabled = false;
+        if (!this.active) {
+            return;
         }
 
 
-        const landmarksBtn =
-            document.getElementById(
-                'landmarksToggleBtn'
-            );
+        if (
+            this.video &&
+            this.video.readyState >= 2 &&
+            this._segmentation &&
+            !this._sendingFrame
+        ) {
 
+            this._sendingFrame =
+                true;
 
-        if (landmarksBtn) {
-            landmarksBtn.disabled = false;
-        }
-
-
-        updateStatus(
-            'Holograma Online',
-            'success'
-        );
-
-
-        console.log(
-            'Holograma iniciado com sucesso.'
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            'ERRO AO INICIAR HOLOGRAMA:',
-            error
-        );
-
-
-        systemStarted = false;
-
-
-        // ====================================================
-        // LIMPA CÂMERA EM CASO DE ERRO
-        // ====================================================
-
-        if (cameraStream) {
-
-            cameraStream
-                .getTracks()
-                .forEach(
-                    track =>
-                        track.stop()
-                );
-
-            cameraStream = null;
-        }
-
-
-        if (hiddenVideo) {
 
             try {
-                hiddenVideo.pause();
-            } catch (_) {}
 
+                await this._segmentation.send({
 
-            hiddenVideo.srcObject =
-                null;
+                    image: this.video
 
+                });
 
-            if (
-                hiddenVideo.parentNode
-            ) {
+            } catch (error) {
 
-                hiddenVideo.parentNode
-                    .removeChild(
-                        hiddenVideo
-                    );
-            }
-
-
-            hiddenVideo = null;
-        }
-
-
-        hCtrl = null;
-        eCtrl = null;
-
-
-        updateStatus(
-            'Erro ao iniciar',
-            'danger'
-        );
-
-
-        const startBtn =
-            document.getElementById(
-                'startBtn'
-            );
-
-
-        if (startBtn) {
-            startBtn.disabled = false;
-        }
-
-
-    } finally {
-
-        startInProgress = false;
-    }
-}
-
-
-// ============================================================
-// SISTEMA DE ÁUDIO
-// ============================================================
-
-function playEmotionAudio(
-    emotion
-) {
-
-    /*
-     * Não reinicia o mesmo áudio.
-     */
-    if (
-        emotion === currentEmotion &&
-        currentAudio
-    ) {
-
-        return;
-    }
-
-
-    const src =
-        AUDIO_MAP[emotion];
-
-
-    if (!src) {
-
-        console.warn(
-            'Áudio não encontrado para:',
-            emotion
-        );
-
-        return;
-    }
-
-
-    currentEmotion =
-        emotion;
-
-
-    /*
-     * Cancela todos os fades anteriores.
-     */
-    const generation =
-        invalidateAudioFades();
-
-
-    /*
-     * Cria imediatamente o novo áudio.
-     *
-     * O áudio antigo e o novo podem coexistir
-     * durante o fade, produzindo uma transição
-     * muito mais suave.
-     */
-    const newAudio =
-        new Audio(src);
-
-
-    newAudio.loop =
-        true;
-
-
-    setAudioVolume(
-        newAudio,
-        0
-    );
-
-
-    /*
-     * Guarda o áudio atual imediatamente.
-     */
-    const oldAudio =
-        currentAudio;
-
-
-    currentAudio =
-        newAudio;
-
-
-    /*
-     * Inicia o novo áudio.
-     */
-    newAudio
-        .play()
-        .catch(
-            error => {
-
-                console.warn(
-                    'Não foi possível iniciar áudio:',
+                console.error(
+                    'Erro no MediaPipe:',
                     error
                 );
+
+            } finally {
+
+                this._sendingFrame =
+                    false;
             }
-        );
+        }
 
 
-    /*
-     * Fade-in do novo áudio.
-     */
-    fadeInAudio(
-        newAudio,
-        generation
-    );
-
-
-    /*
-     * Fade-out do áudio anterior.
-     */
-    if (oldAudio) {
-
-        fadeOutAudio(
-            oldAudio,
-            generation
+        requestAnimationFrame(
+            () =>
+                this._segmentationLoop()
         );
     }
-}
 
 
-// ============================================================
-// FADE IN
-// ============================================================
+    // =========================================================
+    // LOOP FACE API
+    // =========================================================
 
-function fadeInAudio(
-    audio,
-    generation
-) {
+    _faceLoop() {
 
-    if (!audio) {
-        return;
-    }
-
-
-    const target =
-        0.7;
-
-
-    const startTime =
-        performance.now();
-
-
-    function step(now) {
-
-        /*
-         * Se outro áudio foi solicitado,
-         * este fade deixa imediatamente de atuar.
-         */
-        if (
-            generation !==
-            audioGeneration
-        ) {
-
+        if (!this.active) {
             return;
         }
 
 
-        /*
-         * Se o áudio deixou de ser o atual,
-         * não deve mais controlar o volume.
-         */
+        const now =
+            performance.now();
+
+
         if (
-            audio !== currentAudio
-        ) {
-
-            return;
-        }
-
-
-        const elapsed =
             now -
-            startTime;
-
-
-        const progress =
-            Math.min(
-                elapsed /
-                FADE_DURATION,
-                1
-            );
-
-
-        const volume =
-            target *
-            progress;
-
-
-        setAudioVolume(
-            audio,
-            volume
-        );
-
-
-        if (
-            progress < 1
+            this._lastFaceDetectionTime
+            >=
+            this._faceDetectionInterval
         ) {
 
-            requestAnimationFrame(
-                step
-            );
+            this._lastFaceDetectionTime =
+                now;
 
-        } else {
 
-            setAudioVolume(
-                audio,
-                target
-            );
+            this._detectFace();
         }
-    }
 
 
-    requestAnimationFrame(
-        step
-    );
-}
-
-
-// ============================================================
-// FADE OUT
-// ============================================================
-
-function fadeOutAudio(
-    audio,
-    generation
-) {
-
-    if (!audio) {
-        return;
-    }
-
-
-    const startVolume =
-        clampVolume(
-            audio.volume
+        requestAnimationFrame(
+            () =>
+                this._faceLoop()
         );
+    }
 
 
-    const startTime =
-        performance.now();
+    // =========================================================
+    // DETECÇÃO FACIAL
+    // =========================================================
 
+    async _detectFace() {
 
-    function step(now) {
-
-        /*
-         * Se houve uma nova troca de áudio,
-         * este fade antigo não pode mais mexer
-         * no volume.
-         */
         if (
-            generation !==
-            audioGeneration
+            !this.video ||
+            !this.active ||
+            this._detectingFace
         ) {
 
             return;
         }
 
 
-        const elapsed =
-            now -
-            startTime;
-
-
-        const progress =
-            Math.min(
-                elapsed /
-                FADE_DURATION,
-                1
-            );
-
-
-        const volume =
-            startVolume *
-            (
-                1 -
-                progress
-            );
-
-
-        setAudioVolume(
-            audio,
-            volume
-        );
-
-
         if (
-            progress < 1
+            this.video.readyState < 2
         ) {
 
-            requestAnimationFrame(
-                step
-            );
-
-        } else {
-
-            setAudioVolume(
-                audio,
-                0
-            );
-
-
-            try {
-                audio.pause();
-            } catch (_) {}
-
-
-            /*
-             * Não precisamos mais desse recurso.
-             */
-            try {
-                audio.src = '';
-            } catch (_) {}
+            return;
         }
-    }
 
 
-    requestAnimationFrame(
-        step
-    );
-}
-
-
-// ============================================================
-// PARA ÁUDIO
-// ============================================================
-
-function stopAudio() {
-
-    /*
-     * Invalida qualquer fade em andamento.
-     */
-    invalidateAudioFades();
-
-
-    if (currentAudio) {
-
-        const audio =
-            currentAudio;
-
-
-        currentAudio =
-            null;
+        this._detectingFace =
+            true;
 
 
         try {
 
-            setAudioVolume(
-                audio,
-                0
-            );
+            let detection =
+                null;
 
-            audio.pause();
 
-            audio.src = '';
+            // =================================================
+            // DETECÇÃO FACIAL
+            // =================================================
+
+            detection =
+                await faceapi
+                    .detectSingleFace(
+                        this.video,
+                        this._faceOptions
+                    )
+                    .withFaceLandmarks(true)
+                    .withFaceExpressions();
+
+
+            // =================================================
+            // GUARDA LANDMARKS
+            // =================================================
+
+            this._landmarks =
+                detection?.landmarks ||
+                null;
+
+
+            // =================================================
+            // ROSTO ENCONTRADO
+            // =================================================
+
+            if (detection) {
+
+                const newBox =
+                    detection.detection.box;
+
+
+                // =============================================
+                // PRIMEIRA DETECÇÃO
+                // =============================================
+
+                if (
+                    !this._smoothFaceBox
+                ) {
+
+                    this._smoothFaceBox = {
+
+                        x: newBox.x,
+
+                        y: newBox.y,
+
+                        width: newBox.width,
+
+                        height: newBox.height
+
+                    };
+
+                }
+
+
+                // =============================================
+                // SUAVIZA O ROSTO
+                // =============================================
+
+                else {
+
+                    const s =
+                        this._faceSmoothing;
+
+
+                    this._smoothFaceBox.x =
+                        this._smoothFaceBox.x * s +
+                        newBox.x * (1 - s);
+
+
+                    this._smoothFaceBox.y =
+                        this._smoothFaceBox.y * s +
+                        newBox.y * (1 - s);
+
+
+                    this._smoothFaceBox.width =
+                        this._smoothFaceBox.width * s +
+                        newBox.width * (1 - s);
+
+
+                    this._smoothFaceBox.height =
+                        this._smoothFaceBox.height * s +
+                        newBox.height * (1 - s);
+                }
+
+
+                this._faceBox = {
+
+                    ...this._smoothFaceBox
+
+                };
+
+
+                // =============================================
+                // ATUALIZA ENQUADRAMENTO
+                // =============================================
+
+                this._updateHeadFrame();
+
+
+                // =============================================
+                // PROCESSA EMOÇÃO
+                // =============================================
+
+                if (
+                    detection.expressions
+                ) {
+
+                    this._processEmotion(
+                        detection.expressions
+                    );
+                }
+            }
 
         } catch (error) {
 
-            console.warn(
-                'Erro ao parar áudio:',
+            console.error(
+                'Erro face-api:',
                 error
             );
+
+        } finally {
+
+            this._detectingFace =
+                false;
         }
     }
 
 
-    currentEmotion =
-        null;
-}
+    // =========================================================
+    // ATUALIZA ENQUADRAMENTO DA CABEÇA
+    // =========================================================
+
+    _updateHeadFrame() {
+
+        if (
+            !this._faceBox ||
+            !this.video
+        ) {
+
+            return;
+        }
 
 
-// ============================================================
-// CARROSSEL
-// ============================================================
+        const videoW =
+            this.video.videoWidth;
 
-function toggleCarousel() {
 
-    if (
-        !hCtrl ||
-        !eCtrl
+        const videoH =
+            this.video.videoHeight;
+
+
+        if (
+            !videoW ||
+            !videoH
+        ) {
+
+            return;
+        }
+
+
+        const face =
+            this._faceBox;
+
+
+        // =====================================================
+        // PRIMEIRA DETECÇÃO
+        // =====================================================
+
+        if (
+            !this._headFrameInitialized
+        ) {
+
+            const frameWidth =
+                face.width *
+                this._headFrameWidthFactor;
+
+
+            const frameHeight =
+                face.height *
+                this._headFrameHeightFactor;
+
+
+            const centerX =
+                face.x +
+                face.width / 2;
+
+
+            const centerY =
+                face.y +
+                face.height * 0.45;
+
+
+            this._headFrame = {
+
+                x:
+                    centerX -
+                    frameWidth / 2,
+
+                y:
+                    centerY -
+                    frameHeight *
+                    this._headFrameVerticalPosition,
+
+                width:
+                    frameWidth,
+
+                height:
+                    frameHeight
+            };
+
+
+            this._headFrameInitialized =
+                true;
+
+
+            this._clampHeadFrame();
+
+
+            return;
+        }
+
+
+        // =====================================================
+        // ENQUADRAMENTO JÁ EXISTE
+        // =====================================================
+
+        const frame =
+            this._headFrame;
+
+
+        const centerX =
+            face.x +
+            face.width / 2;
+
+
+        const centerY =
+            face.y +
+            face.height * 0.45;
+
+
+        const targetX =
+            centerX -
+            frame.width / 2;
+
+
+        const targetY =
+            centerY -
+            frame.height *
+            this._headFrameVerticalPosition;
+
+
+        const s =
+            this._headFrameSmoothing;
+
+
+        frame.x =
+            frame.x * s +
+            targetX * (1 - s);
+
+
+        frame.y =
+            frame.y * s +
+            targetY * (1 - s);
+
+
+        this._clampHeadFrame();
+    }
+
+
+    // =========================================================
+    // LIMITA ENQUADRAMENTO À CÂMERA
+    // =========================================================
+
+    _clampHeadFrame() {
+
+        if (
+            !this._headFrame ||
+            !this.video
+        ) {
+
+            return;
+        }
+
+
+        const videoW =
+            this.video.videoWidth;
+
+
+        const videoH =
+            this.video.videoHeight;
+
+
+        const frame =
+            this._headFrame;
+
+
+        // =====================================================
+        // HORIZONTAL
+        // =====================================================
+
+        if (
+            frame.width >= videoW
+        ) {
+
+            frame.x =
+                0;
+
+            frame.width =
+                videoW;
+
+        } else {
+
+            frame.x =
+                Math.max(
+                    0,
+                    Math.min(
+                        frame.x,
+                        videoW -
+                        frame.width
+                    )
+                );
+        }
+
+
+        // =====================================================
+        // VERTICAL
+        // =====================================================
+
+        if (
+            frame.height >= videoH
+        ) {
+
+            frame.y =
+                0;
+
+            frame.height =
+                videoH;
+
+        } else {
+
+            frame.y =
+                Math.max(
+                    0,
+                    Math.min(
+                        frame.y,
+                        videoH -
+                        frame.height
+                    )
+                );
+        }
+    }
+
+
+    // =========================================================
+    // OBTÉM CONFIGURAÇÃO DA EMOÇÃO
+    // =========================================================
+
+    _getEmotionMinConfidence(
+        emotion
     ) {
 
-        return;
+        if (
+            this._emotionMinConfidenceByType &&
+            this._emotionMinConfidenceByType[
+                emotion
+            ] !== undefined
+        ) {
+
+            return (
+                this._emotionMinConfidenceByType[
+                    emotion
+                ]
+            );
+        }
+
+
+        return this._emotionMinConfidence;
     }
 
 
-    carouselActive =
-        !carouselActive;
+    // =========================================================
+    // OBTÉM FRAMES NECESSÁRIOS
+    // =========================================================
 
+    _getEmotionRequiredFrames(
+        emotion
+    ) {
 
-    const btn =
-        document.getElementById(
-            'carouselToggleBtn'
-        );
+        if (
+            this._emotionRequiredFramesByType &&
+            this._emotionRequiredFramesByType[
+                emotion
+            ] !== undefined
+        ) {
 
-
-    const infinityEl =
-        document.getElementById(
-            'infinityWidget'
-        );
-
-
-    const aiPanel =
-        document.getElementById(
-            'aiPanel'
-        );
-
-
-    const carouselPanel =
-        document.getElementById(
-            'carouselPanel'
-        );
-
-
-    const hintEl =
-        document.getElementById(
-            'keyboardHint'
-        );
-
-
-    const lBtn =
-        document.getElementById(
-            'landmarksToggleBtn'
-        );
-
-
-    // ========================================================
-    // ATIVA CARROSSEL
-    // ========================================================
-
-    if (carouselActive) {
-
-
-        /*
-         * IMPORTANTE:
-         *
-         * NÃO fazemos:
-         *
-         * eCtrl.active = false
-         *
-         * porque isso interromperia os loops
-         * de detecção do EmotionController.
-         *
-         * A detecção continua rodando, mas o
-         * callback onEmotionChange ignora suas
-         * alterações enquanto carouselActive = true.
-         */
-        eCtrl.carouselMode =
-            true;
-
-
-        /*
-         * Para o áudio da emoção detectada.
-         */
-        stopAudio();
-
-
-        /*
-         * Ativa o carrossel visual.
-         *
-         * enableCarousel() chama internamente
-         * _applyCarouselFrame(), que por sua vez
-         * dispara _onCarouselChange.
-         *
-         * Como carouselActive já está true,
-         * o callback encontra videoTop e toca
-         * o áudio da expressão que está no topo.
-         */
-        hCtrl.enableCarousel();
-
-
-        // ====================================================
-        // UI
-        // ====================================================
-
-        if (btn) {
-
-            btn.classList.add(
-                'active'
-            );
-
-            btn.innerHTML =
-                '∞ CARROSSEL ON';
-        }
-
-
-        if (infinityEl) {
-
-            infinityEl.classList.add(
-                'visible'
+            return (
+                this._emotionRequiredFramesByType[
+                    emotion
+                ]
             );
         }
 
 
-        if (aiPanel) {
+        return this._emotionRequiredFrames;
+    }
 
-            aiPanel.classList.add(
-                'hidden'
+
+    // =========================================================
+    // OBTÉM TEMPO DE TRANSIÇÃO
+    // =========================================================
+
+    _getEmotionTransitionDuration(
+        emotion
+    ) {
+
+        if (
+            this._emotionTransitionDurationByType &&
+            this._emotionTransitionDurationByType[
+                emotion
+            ] !== undefined
+        ) {
+
+            return (
+                this._emotionTransitionDurationByType[
+                    emotion
+                ]
             );
         }
 
 
-        if (carouselPanel) {
+        return this._emotionTransitionDuration;
+    }
 
-            carouselPanel.classList.remove(
-                'hidden'
-            );
+
+    // =========================================================
+    // PROCESSA EMOÇÃO
+    // =========================================================
+
+    _processEmotion(expressions) {
+
+        if (!expressions) {
+            return;
         }
 
 
-        if (hintEl) {
+        // =====================================================
+        // ENCONTRA EMOÇÃO MAIS PROVÁVEL
+        // =====================================================
 
-            hintEl.classList.remove(
-                'hidden'
-            );
+        let detectedEmotion =
+            'neutral';
+
+
+        let detectedConfidence =
+            0;
+
+
+        for (
+            const [name, value]
+            of Object.entries(expressions)
+        ) {
+
+            if (
+                value >
+                detectedConfidence
+            ) {
+
+                detectedConfidence =
+                    value;
+
+                detectedEmotion =
+                    name;
+            }
         }
 
 
-        if (lBtn) {
+        // =====================================================
+        // CONFIDÊNCIA MÍNIMA ESPECÍFICA
+        // =====================================================
 
-            lBtn.classList.add(
-                'locked'
-            );
-
-            lBtn.title =
-                'Indisponível no modo carrossel';
-        }
-
-
-        updateStatus(
-            'Modo Carrossel Ativo',
-            'warning'
-        );
-
-
-        /*
-         * Garante que a interface esteja sincronizada
-         * imediatamente após a ativação.
-         */
-        const faces =
-            hCtrl.getCurrentFaceEmotions();
-
-
-        updateCarouselLabels(
-            faces
-        );
-
-
-        updateInfinityWidget(
-            faces,
-            null,
-            null,
-            0
-        );
-
-
-        /*
-         * Garante explicitamente o áudio da expressão
-         * que está em videoTop.
-         *
-         * Se o callback do enableCarousel() já tiver
-         * feito isso, playEmotionAudio() simplesmente
-         * não reinicia o mesmo áudio.
-         */
-        const topFace =
-            faces.find(
-                item =>
-                    item.face ===
-                    'videoTop'
+        const minimumConfidence =
+            this._getEmotionMinConfidence(
+                detectedEmotion
             );
 
 
         if (
-            topFace &&
-            topFace.emotion
+            detectedConfidence <
+            minimumConfidence
         ) {
 
+            return;
+        }
+
+
+        const now =
+            performance.now();
+
+
+        // =====================================================
+        // GUARDA NO HISTÓRICO
+        // =====================================================
+
+        this._emotionHistory.push({
+
+            emotion:
+                detectedEmotion,
+
+            confidence:
+                detectedConfidence,
+
+            time:
+                now
+
+        });
+
+
+        if (
+            this._emotionHistory.length >
+            this._emotionHistorySize
+        ) {
+
+            this._emotionHistory.shift();
+        }
+
+
+        // =====================================================
+        // ENCONTRA EMOÇÃO DOMINANTE
+        // =====================================================
+
+        const counts =
+            {};
+
+
+        for (
+            const item
+            of this._emotionHistory
+        ) {
+
+            counts[item.emotion] =
+                (counts[item.emotion] || 0) +
+                1;
+        }
+
+
+        let dominantEmotion =
+            detectedEmotion;
+
+
+        let dominantCount =
+            0;
+
+
+        for (
+            const [emotion, count]
+            of Object.entries(counts)
+        ) {
+
+            if (
+                count >
+                dominantCount
+            ) {
+
+                dominantEmotion =
+                    emotion;
+
+                dominantCount =
+                    count;
+            }
+        }
+
+
+        // =====================================================
+        // CONFIANÇA MÉDIA
+        // =====================================================
+
+        let confidenceSum =
+            0;
+
+
+        let confidenceCount =
+            0;
+
+
+        for (
+            const item
+            of this._emotionHistory
+        ) {
+
+            if (
+                item.emotion ===
+                dominantEmotion
+            ) {
+
+                confidenceSum +=
+                    item.confidence;
+
+                confidenceCount++;
+            }
+        }
+
+
+        const averageConfidence =
+            confidenceCount > 0
+                ? confidenceSum /
+                  confidenceCount
+                : detectedConfidence;
+
+
+        // =====================================================
+        // PRIMEIRA EMOÇÃO
+        // =====================================================
+
+        if (
+            this._lastEmotion === null
+        ) {
+
+            if (
+                this._candidateEmotion !==
+                dominantEmotion
+            ) {
+
+                this._candidateEmotion =
+                    dominantEmotion;
+
+                this._candidateEmotionCount =
+                    1;
+
+                this._candidateStartTime =
+                    now;
+
+                return;
+            }
+
+
+            this._candidateEmotionCount++;
+
+
+            const candidateDuration =
+                now -
+                this._candidateStartTime;
+
+
+            const requiredFrames =
+                this._getEmotionRequiredFrames(
+                    dominantEmotion
+                );
+
+
+            const transitionDuration =
+                this._getEmotionTransitionDuration(
+                    dominantEmotion
+                );
+
+
+            if (
+                this._candidateEmotionCount >=
+                    requiredFrames &&
+                candidateDuration >=
+                    transitionDuration
+            ) {
+
+                this._confirmEmotion(
+                    dominantEmotion,
+                    averageConfidence,
+                    now
+                );
+            }
+
+
+            return;
+        }
+
+
+        // =====================================================
+        // MESMA EMOÇÃO ATUAL
+        // =====================================================
+
+        if (
+            dominantEmotion ===
+            this._lastEmotion
+        ) {
+
+            this._candidateEmotion =
+                null;
+
+
+            this._candidateEmotionCount =
+                0;
+
+
+            this._candidateStartTime =
+                0;
+
+
+            return;
+        }
+
+
+        // =====================================================
+        // NOVA EMOÇÃO APARECEU
+        // =====================================================
+
+        if (
+            this._candidateEmotion !==
+            dominantEmotion
+        ) {
+
+            this._candidateEmotion =
+                dominantEmotion;
+
+
+            this._candidateEmotionCount =
+                1;
+
+
+            this._candidateStartTime =
+                now;
+
+
             console.log(
-                'Carrossel iniciado — expressão no topo:',
-                topFace.emotion
+                'Nova emoção candidata:',
+                dominantEmotion
             );
 
 
-            playEmotionAudio(
-                topFace.emotion
-            );
+            return;
         }
 
 
-    } else {
+        // =====================================================
+        // CANDIDATA CONTINUA PRESENTE
+        // =====================================================
+
+        this._candidateEmotionCount++;
 
 
-        // ====================================================
-        // DESATIVA CARROSSEL
-        // ====================================================
-
-        eCtrl.carouselMode =
-            false;
+        const candidateDuration =
+            now -
+            this._candidateStartTime;
 
 
-        /*
-         * A detecção já continuou rodando durante
-         * o carrossel. Apenas voltamos para o modo normal.
-         */
-        eCtrl.active =
-            true;
+        // =====================================================
+        // PROTEÇÃO DA EMOÇÃO ATUAL
+        // =====================================================
+
+        const currentEmotionDuration =
+            now -
+            this._emotionStartTime;
 
 
-        stopAudio();
+        if (
+            currentEmotionDuration <
+            this._emotionMinimumDuration
+        ) {
 
-
-        hCtrl.disableCarousel();
-
-
-        clearCarouselLabels();
-
-
-        // ====================================================
-        // UI
-        // ====================================================
-
-        if (btn) {
-
-            btn.classList.remove(
-                'active'
-            );
-
-            btn.innerHTML =
-                '∞ CARROSSEL';
+            return;
         }
 
 
-        if (infinityEl) {
+        // =====================================================
+        // PROTEÇÃO ESPECIAL — SOMENTE PARA NEUTRO
+        // =====================================================
 
-            infinityEl.classList.remove(
-                'visible'
-            );
+        if (
+            dominantEmotion === 'neutral' &&
+            candidateDuration <
+            this._neutralExitDelay
+        ) {
+
+            return;
         }
 
 
-        if (aiPanel) {
+        // =====================================================
+        // CONFIGURAÇÃO ESPECÍFICA
+        // =====================================================
 
-            aiPanel.classList.remove(
-                'hidden'
+        const requiredFrames =
+            this._getEmotionRequiredFrames(
+                dominantEmotion
             );
+
+
+        const transitionDuration =
+            this._getEmotionTransitionDuration(
+                dominantEmotion
+            );
+
+
+        // =====================================================
+        // TEMPO DE TRANSIÇÃO
+        // =====================================================
+
+        if (
+            candidateDuration <
+            transitionDuration
+        ) {
+
+            return;
         }
 
 
-        if (carouselPanel) {
+        // =====================================================
+        // FRAMES SUFICIENTES
+        // =====================================================
 
-            carouselPanel.classList.add(
-                'hidden'
-            );
+        if (
+            this._candidateEmotionCount <
+            requiredFrames
+        ) {
+
+            return;
         }
 
 
-        if (hintEl) {
+        // =====================================================
+        // CONFIRMA NOVA EMOÇÃO
+        // =====================================================
 
-            hintEl.classList.add(
-                'hidden'
-            );
-        }
-
-
-        if (lBtn) {
-
-            lBtn.classList.remove(
-                'locked'
-            );
-
-            lBtn.title = '';
-        }
-
-
-        updateStatus(
-            'Holograma Online',
-            'success'
+        this._confirmEmotion(
+            dominantEmotion,
+            averageConfidence,
+            now
         );
+    }
+
+
+    // =========================================================
+    // CONFIRMA EMOÇÃO
+    // =========================================================
+
+    _confirmEmotion(
+        emotion,
+        confidence,
+        now
+    ) {
+
+        // =====================================================
+        // ATUALIZA ESTADO
+        // =====================================================
+
+        this._lastEmotion =
+            emotion;
+
+
+        this._emotionStartTime =
+            now;
+
+
+        // =====================================================
+        // LIMPA CANDIDATA
+        // =====================================================
+
+        this._candidateEmotion =
+            null;
+
+
+        this._candidateEmotionCount =
+            0;
+
+
+        this._candidateStartTime =
+            0;
 
 
         console.log(
-            'Carrossel desativado — segmentação continua ativa.'
-        );
-    }
-}
-
-
-// ============================================================
-// LANDMARKS
-// ============================================================
-
-function toggleLandmarks() {
-
-    if (!eCtrl) {
-        return;
-    }
-
-
-    /*
-     * Landmarks ficam bloqueados no carrossel.
-     */
-    if (carouselActive) {
-        return;
-    }
-
-
-    landmarksActive =
-        !landmarksActive;
-
-
-    eCtrl.showLandmarks =
-        landmarksActive;
-
-
-    const btn =
-        document.getElementById(
-            'landmarksToggleBtn'
+            'Emoção estabilizada:',
+            emotion,
+            'confiança:',
+            confidence.toFixed(2)
         );
 
 
-    if (btn) {
-
-        btn.classList.toggle(
-            'active',
-            landmarksActive
-        );
-
-
-        btn.innerHTML =
-            landmarksActive
-                ? '⬡ PONTOS ON'
-                : '⬡ PONTOS FACIAIS';
-    }
-}
-
-
-// ============================================================
-// TECLADO — CARROSSEL
-// ============================================================
-
-document.addEventListener(
-    'keydown',
-    event => {
+        // =====================================================
+        // ATUALIZA SISTEMA DE LÁGRIMAS
+        // =====================================================
 
         if (
-            !carouselActive ||
-            !hCtrl
+            this._tears
+        ) {
+
+            this._tears.setEmotion(
+                emotion,
+                confidence
+            );
+        }
+
+
+        // =====================================================
+        // ATUALIZA EFEITOS ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                emotion,
+                confidence
+            );
+        }
+
+
+        // =====================================================
+        // ENVIA PARA O SISTEMA PRINCIPAL
+        // =====================================================
+
+        if (
+            this.onEmotionChange
+        ) {
+
+            this.onEmotionChange(
+                emotion,
+                confidence
+            );
+        }
+    }
+
+
+    // =========================================================
+    // LOOP VISUAL
+    // =========================================================
+
+    _renderLoop() {
+
+        const now =
+            performance.now();
+
+
+        const delta =
+            now -
+            this._lastRenderTime;
+
+
+        this._lastRenderTime =
+            now;
+
+
+        // =====================================================
+        // ATUALIZA EFEITOS ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.update(
+                delta
+            );
+
+        }
+
+
+        // =====================================================
+        // DESENHA
+        // =====================================================
+
+        this._drawAll();
+
+
+        requestAnimationFrame(
+            () =>
+                this._renderLoop()
+        );
+    }
+
+
+    // =========================================================
+    // REGISTRA CANVAS
+    // =========================================================
+
+    registerCanvas(
+        id,
+        canvas,
+        videoEl
+    ) {
+
+        if (!canvas) {
+            return;
+        }
+
+
+        const ctx =
+            canvas.getContext('2d');
+
+
+        if (!ctx) {
+            return;
+        }
+
+
+        this.canvases[id] = {
+
+            canvas,
+
+            videoEl,
+
+            ctx
+
+        };
+    }
+
+
+    // =========================================================
+    // DESENHA TODOS OS CANVASES
+    // =========================================================
+
+    _drawAll() {
+
+        if (!this.video) {
+            return;
+        }
+
+
+        if (
+            this.video.readyState < 2 ||
+            !this.video.videoWidth
+        ) {
+
+            return;
+        }
+
+
+        for (
+            const item
+            of Object.values(
+                this.canvases
+            )
+        ) {
+
+            const {
+                canvas,
+                ctx
+            } = item;
+
+
+            if (
+                !canvas ||
+                !ctx
+            ) {
+
+                continue;
+            }
+
+
+            const w =
+                canvas.width;
+
+
+            const h =
+                canvas.height;
+
+
+            if (
+                w <= 0 ||
+                h <= 0
+            ) {
+
+                continue;
+            }
+
+
+            // =================================================
+            // FUNDO PRETO
+            // =================================================
+
+            ctx.save();
+
+
+            ctx.globalCompositeOperation =
+                'source-over';
+
+
+            ctx.fillStyle =
+                '#000000';
+
+
+            ctx.fillRect(
+                0,
+                0,
+                w,
+                h
+            );
+
+
+            // =================================================
+            // AGUARDA MÁSCARA
+            // =================================================
+
+            if (
+                !this._segmentationReady
+            ) {
+
+                ctx.restore();
+
+                continue;
+            }
+
+
+            // =================================================
+            // USA MÁSCARA ATUAL
+            // =================================================
+
+            const mask =
+                this._segmentationMask ||
+                this._lastValidMask;
+
+
+            if (!mask) {
+
+                ctx.restore();
+
+                continue;
+            }
+
+
+            // =================================================
+            // DESENHA CABEÇA SEGMENTADA
+            // =================================================
+
+            this._drawHeadSegmented(
+
+                ctx,
+
+                w,
+
+                h,
+
+                mask
+
+            );
+
+
+            ctx.restore();
+        }
+    }
+
+
+    // =========================================================
+    // DESENHA SOMENTE A CABEÇA SEGMENTADA
+    // =========================================================
+
+    _drawHeadSegmented(
+        ctx,
+        outputW,
+        outputH,
+        segmentationMask
+    ) {
+
+        const videoW =
+            this.video.videoWidth;
+
+
+        const videoH =
+            this.video.videoHeight;
+
+
+        if (
+            !videoW ||
+            !videoH
+        ) {
+
+            return;
+        }
+
+
+        // =====================================================
+        // AGUARDA DETECÇÃO FACIAL
+        // =====================================================
+
+        if (
+            !this._faceBox ||
+            !this._headFrame
+        ) {
+
+            return;
+        }
+
+
+        const frame =
+            this._headFrame;
+
+
+        if (
+            frame.width <= 0 ||
+            frame.height <= 0
+        ) {
+
+            return;
+        }
+
+
+        // =====================================================
+        // COPIA MÁSCARA MEDIAPIPE
+        // =====================================================
+
+        const maskCtx =
+            this._maskCtx;
+
+
+        maskCtx.clearRect(
+            0,
+            0,
+            videoW,
+            videoH
+        );
+
+
+        maskCtx.globalCompositeOperation =
+            'source-over';
+
+
+        maskCtx.drawImage(
+
+            segmentationMask,
+
+            0,
+            0,
+            videoW,
+            videoH
+
+        );
+
+
+        // =====================================================
+        // COPIA IMAGEM DA CÂMERA
+        // =====================================================
+
+        const personCtx =
+            this._personCtx;
+
+
+        personCtx.clearRect(
+            0,
+            0,
+            videoW,
+            videoH
+        );
+
+
+        personCtx.globalCompositeOperation =
+            'source-over';
+
+
+        personCtx.drawImage(
+
+            this.video,
+
+            0,
+            0,
+            videoW,
+            videoH
+
+        );
+
+
+        // =====================================================
+        // APLICA SEGMENTAÇÃO
+        // =====================================================
+
+        personCtx.globalCompositeOperation =
+            'destination-in';
+
+
+        personCtx.drawImage(
+
+            this._maskCanvas,
+
+            0,
+            0
+
+        );
+
+
+        // =====================================================
+        // LIMITA À JANELA DA CABEÇA
+        // =====================================================
+
+        personCtx.globalCompositeOperation =
+            'destination-in';
+
+
+        personCtx.fillStyle =
+            '#ffffff';
+
+
+        personCtx.fillRect(
+
+            frame.x,
+
+            frame.y,
+
+            frame.width,
+
+            frame.height
+
+        );
+
+
+        // =====================================================
+        // MANTÉM PROPORÇÃO
+        // =====================================================
+
+        const sourceAspect =
+            frame.width /
+            frame.height;
+
+
+        const outputAspect =
+            outputW /
+            outputH;
+
+
+        let drawWidth =
+            outputW;
+
+
+        let drawHeight =
+            outputH;
+
+
+        let drawX =
+            0;
+
+
+        let drawY =
+            0;
+
+
+        if (
+            sourceAspect >
+            outputAspect
+        ) {
+
+            drawHeight =
+                outputH;
+
+
+            drawWidth =
+                outputH *
+                sourceAspect;
+
+
+            drawX =
+                (
+                    outputW -
+                    drawWidth
+                ) / 2;
+
+        } else {
+
+            drawWidth =
+                outputW;
+
+
+            drawHeight =
+                outputW /
+                sourceAspect;
+
+
+            drawY =
+                (
+                    outputH -
+                    drawHeight
+                ) / 2;
+        }
+
+
+        // =====================================================
+        // DESENHA NO HOLOGRAMA
+        // =====================================================
+
+        ctx.drawImage(
+
+            this._personCanvas,
+
+            frame.x,
+            frame.y,
+            frame.width,
+            frame.height,
+
+            drawX,
+            drawY,
+            drawWidth,
+            drawHeight
+
+        );
+
+
+        // =====================================================
+        // LÁGRIMAS HOLOGRÁFICAS
+        // =====================================================
+
+        if (
+            this._landmarks &&
+            this._tears
+        ) {
+
+            const scaleX =
+                drawWidth /
+                frame.width;
+
+
+            const scaleY =
+                drawHeight /
+                frame.height;
+
+
+            this._tears.draw(
+
+                ctx,
+
+                this._landmarks.positions,
+
+                {
+
+                    frameX:
+                        frame.x,
+
+                    frameY:
+                        frame.y,
+
+                    drawX:
+                        drawX,
+
+                    drawY:
+                        drawY,
+
+                    scaleX:
+                        scaleX,
+
+                    scaleY:
+                        scaleY,
+
+                    scale:
+                        (
+                            scaleX +
+                            scaleY
+                        ) / 2
+
+                }
+
+            );
+        }
+
+
+        // =====================================================
+        // EFEITOS ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.draw(
+
+                ctx,
+
+                {
+
+                    drawX:
+                        drawX,
+
+                    drawY:
+                        drawY,
+
+                    drawWidth:
+                        drawWidth,
+
+                    drawHeight:
+                        drawHeight
+
+                }
+
+            );
+
+        }
+    }
+
+
+    // =========================================================
+    // CONTROLES
+    // =========================================================
+
+    setLandmarksVisible(
+        visible
+    ) {
+
+        this.showLandmarks =
+            Boolean(visible);
+    }
+
+
+    // =========================================================
+    // MODO CARROSSEL
+    // =========================================================
+
+    setCarouselMode(
+        enabled
+    ) {
+
+        this.carouselMode =
+            Boolean(enabled);
+    }
+
+
+    // =========================================================
+    // DEFINE EMOÇÃO VISUAL DO CARROSSEL
+    // =========================================================
+
+    setCarouselEmotion(
+        emotion
+    ) {
+
+        if (
+            !this.carouselMode
         ) {
 
             return;
@@ -1729,339 +2274,143 @@ document.addEventListener(
 
 
         if (
-            event.key ===
-                'ArrowRight' ||
-            event.key ===
-                'ArrowDown'
+            !emotion
         ) {
 
-            event.preventDefault();
-
-            hCtrl.rotateCarousel(
-                +1
-            );
+            return;
+        }
 
 
-        } else if (
-            event.key ===
-                'ArrowLeft' ||
-            event.key ===
-                'ArrowUp'
+        // =====================================================
+        // ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
         ) {
 
-            event.preventDefault();
-
-            hCtrl.rotateCarousel(
-                -1
+            this._angryEffects.setEmotion(
+                emotion,
+                1
             );
+
         }
-    }
-);
 
 
-// ============================================================
-// LABELS DO CARROSSEL
-// ============================================================
+        // =====================================================
+        // LÁGRIMAS
+        // =====================================================
 
-function updateCarouselLabels(
-    faceEmotions
-) {
+        if (
+            this._tears
+        ) {
 
-    const faceMap = {
+            this._tears.setEmotion(
+                emotion,
+                1
+            );
 
-        videoTop:
-            'labelTop',
-
-        videoLeft:
-            'labelLeft',
-
-        videoRight:
-            'labelRight',
-
-        videoBottom:
-            'labelBottom'
-    };
-
-
-    const panelMap = {
-
-        videoTop:
-            'labelTopPanel',
-
-        videoLeft:
-            'labelLeftPanel',
-
-        videoRight:
-            'labelRightPanel',
-
-        videoBottom:
-            'labelBottomPanel'
-    };
-
-
-    const grid =
-        document.getElementById(
-            'hologramGrid'
-        );
-
-
-    if (grid) {
-
-        grid.classList.add(
-            'carousel-active'
-        );
-    }
-
-
-    faceEmotions.forEach(
-        ({
-            face,
-            emotion,
-            color
-        }) => {
-
-
-            const el =
-                document.getElementById(
-                    faceMap[face]
-                );
-
-
-            if (el) {
-
-                el.innerText =
-                    emotion.toUpperCase();
-
-
-                el.style.color =
-                    color;
-
-
-                el.style.borderColor =
-                    color +
-                    '88';
-            }
-
-
-            const pel =
-                document.getElementById(
-                    panelMap[face]
-                );
-
-
-            if (pel) {
-
-                pel.innerText =
-                    emotion.toUpperCase();
-
-
-                pel.style.color =
-                    color;
-            }
         }
-    );
-}
 
-
-// ============================================================
-// LIMPA LABELS
-// ============================================================
-
-function clearCarouselLabels() {
-
-    const grid =
-        document.getElementById(
-            'hologramGrid'
-        );
-
-
-    if (grid) {
-
-        grid.classList.remove(
-            'carousel-active'
-        );
-    }
-}
-
-
-// ============================================================
-// WIDGET INFINITO
-// ============================================================
-
-function updateInfinityWidget(
-    faceEmotions,
-    inEmotion,
-    outEmotion,
-    direction
-) {
-
-    const widget =
-        document.getElementById(
-            'infinityWidget'
-        );
-
-
-    /*
-     * Quando o carrossel é inicializado,
-     * inEmotion e outEmotion são null.
-     *
-     * Nesse caso não atualizamos os elementos
-     * de entrada/saída, apenas mantemos o widget.
-     */
-    if (
-        !widget ||
-        !inEmotion
-    ) {
-
-        return;
     }
 
 
-    const inColor =
-        hCtrl.getFilterColor(
-            inEmotion
+    // =========================================================
+    // PARA DETECÇÃO
+    // =========================================================
+
+    stop() {
+
+        this.active =
+            false;
+
+
+        this._sendingFrame =
+            false;
+
+
+        this._detectingFace =
+            false;
+
+
+        this._segmentationMask =
+            null;
+
+
+        this._lastValidMask =
+            null;
+
+
+        this._segmentationReady =
+            false;
+
+
+        this._faceBox =
+            null;
+
+
+        this._smoothFaceBox =
+            null;
+
+
+        this._landmarks =
+            null;
+
+
+        this._headFrame =
+            null;
+
+
+        this._headFrameInitialized =
+            false;
+
+
+        // =====================================================
+        // RESET EMOÇÕES
+        // =====================================================
+
+        this._emotionHistory =
+            [];
+
+
+        this._lastEmotion =
+            null;
+
+
+        this._candidateEmotion =
+            null;
+
+
+        this._candidateEmotionCount =
+            0;
+
+
+        this._emotionStartTime =
+            0;
+
+
+        this._candidateStartTime =
+            0;
+
+
+        // =====================================================
+        // RESET EFEITO ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                'neutral',
+                0
+            );
+
+        }
+
+
+        console.log(
+            'EmotionController parado.'
         );
-
-
-    const outColor =
-        hCtrl.getFilterColor(
-            outEmotion
-        );
-
-
-    const inEl =
-        widget.querySelector(
-            '.inf-in'
-        );
-
-
-    const outEl =
-        widget.querySelector(
-            '.inf-out'
-        );
-
-
-    if (inEl) {
-
-        inEl.innerText =
-            inEmotion;
-
-
-        inEl.style.color =
-            inColor;
     }
-
-
-    if (outEl) {
-
-        outEl.innerText =
-            outEmotion;
-
-
-        outEl.style.color =
-            outColor;
-    }
-
-
-    /*
-     * Reinicia a animação pulse.
-     */
-    widget.classList.remove(
-        'pulse'
-    );
-
-
-    void widget.offsetWidth;
-
-
-    widget.classList.add(
-        'pulse'
-    );
 }
-
-
-// ============================================================
-// STATUS
-// ============================================================
-
-function updateStatus(
-    message,
-    type
-) {
-
-    const status =
-        document.getElementById(
-            'systemStatus'
-        );
-
-
-    if (!status) {
-        return;
-    }
-
-
-    status.innerText =
-        message;
-
-
-    status.className =
-        'small mb-2 text-' +
-        type;
-}
-
-
-// ============================================================
-// EVENTOS
-// ============================================================
-
-const startButton =
-    document.getElementById(
-        'startBtn'
-    );
-
-
-if (startButton) {
-
-    startButton.addEventListener(
-        'click',
-        start
-    );
-}
-
-
-const carouselButton =
-    document.getElementById(
-        'carouselToggleBtn'
-    );
-
-
-if (carouselButton) {
-
-    carouselButton.addEventListener(
-        'click',
-        toggleCarousel
-    );
-}
-
-
-const landmarksButton =
-    document.getElementById(
-        'landmarksToggleBtn'
-    );
-
-
-if (landmarksButton) {
-
-    landmarksButton.addEventListener(
-        'click',
-        toggleLandmarks
-    );
-}
-
-
-// ============================================================
-// WINDOW LOAD
-// ============================================================
-
-window.onload =
-    init;
