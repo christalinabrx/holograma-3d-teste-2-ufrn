@@ -3,18 +3,21 @@ export class HologramController {
 
     constructor() {
 
-        // Ordem física das faces no carrossel
+        // =========================================================
+        // FACES DO HOLOGRAMA
+        // =========================================================
+
         this._faceIds = [
-            'videoBottom',
-            'videoLeft',
             'videoTop',
-            'videoRight'
+            'videoLeft',
+            'videoRight',
+            'videoBottom'
         ];
 
 
-        // ========================================================
-        // EMOÇÕES
-        // ========================================================
+        // =========================================================
+        // NOMES DAS EMOÇÕES
+        // =========================================================
 
         this.emotionPT = {
 
@@ -29,9 +32,9 @@ export class HologramController {
         };
 
 
-        // ========================================================
-        // FILTROS
-        // ========================================================
+        // =========================================================
+        // FILTROS VISUAIS
+        // =========================================================
 
         this.filters = {
 
@@ -73,11 +76,14 @@ export class HologramController {
         };
 
 
-        // ========================================================
-        // ESTADO DO CARROSSEL
-        // ========================================================
+        // =========================================================
+        // ESTADO
+        // =========================================================
 
         this.carouselMode = false;
+
+
+        // Ordem fixa do carrossel
 
         this.emotionQueue = [
             'happy',
@@ -89,38 +95,42 @@ export class HologramController {
             'neutral'
         ];
 
+
+        // Posição atual da janela de 4 emoções
+
         this.queueOffset = 0;
 
 
-        // Callback usado pelo main.js
+        // Callback externo
+
         this._onCarouselChange = null;
+
     }
 
 
-    // ============================================================
-    // ELEMENTOS
-    // ============================================================
+    // =========================================================
+    // OBTÉM OS ELEMENTOS VISUAIS
+    // =========================================================
 
     _getEls() {
 
-        return this._faceIds.map(
-            id =>
-                document.getElementById(
-                    id + '_canvas'
-                ) ||
+        return this._faceIds.map(id => {
+
+            return (
+                document.getElementById(id + '_canvas') ||
                 document.getElementById(id)
-        );
+            );
+
+        });
+
     }
 
 
-    // ============================================================
+    // =========================================================
     // MODO IA
-    // ============================================================
+    // =========================================================
 
-    applyEmotionFilter(
-        emotion,
-        confidence
-    ) {
+    applyEmotionFilter(emotion, confidence = 1) {
 
         if (this.carouselMode) {
             return;
@@ -132,26 +142,36 @@ export class HologramController {
             this.filters.neutral;
 
 
-        this._getEls().forEach(
-            el => {
+        const safeConfidence =
+            Math.max(
+                0,
+                Math.min(
+                    1,
+                    Number(confidence) || 0
+                )
+            );
 
-                if (el) {
 
-                    el.style.filter =
-                        f.css;
+        this._getEls().forEach(el => {
 
-                    el.style.opacity =
-                        0.5 +
-                        confidence * 0.5;
-                }
+            if (!el) {
+                return;
             }
-        );
+
+
+            el.style.filter = f.css;
+
+
+            el.style.opacity =
+                0.5 +
+                safeConfidence * 0.5;
+
+        });
+
     }
 
 
-    // ============================================================
-    // ALIAS
-    // ============================================================
+    // Compatibilidade com chamadas antigas
 
     applyEmotionFilterToCanvases(
         emotion,
@@ -162,60 +182,63 @@ export class HologramController {
             emotion,
             confidence
         );
+
     }
 
 
-    // ============================================================
-    // ATIVA CARROSSEL
-    // ============================================================
+    // =========================================================
+    // CARROSSEL
+    // =========================================================
 
     enableCarousel() {
 
-        this.carouselMode =
-            true;
+        this.carouselMode = true;
 
 
-        this._applyCarouselFrame();
+        this._applyCarouselFrame(
+            0,
+            null,
+            null
+        );
+
     }
 
-
-    // ============================================================
-    // DESATIVA CARROSSEL
-    // ============================================================
 
     disableCarousel() {
 
-        this.carouselMode =
-            false;
+        this.carouselMode = false;
 
 
-        this._getEls().forEach(
-            el => {
+        this._getEls().forEach(el => {
 
-                if (el) {
-
-                    el.style.filter =
-                        'none';
-
-                    el.style.opacity =
-                        1;
-                }
+            if (!el) {
+                return;
             }
-        );
+
+
+            el.style.filter = 'none';
+            el.style.opacity = '1';
+
+        });
+
     }
 
 
-    // ============================================================
-    // GIRA CARROSSEL
-    // ============================================================
+    // =========================================================
+    // ROTAÇÃO
+    // =========================================================
 
-    rotateCarousel(
-        direction
-    ) {
+    rotateCarousel(direction) {
 
         if (!this.carouselMode) {
-            return;
+            return null;
         }
+
+
+        direction =
+            direction >= 0
+                ? 1
+                : -1;
 
 
         const len =
@@ -226,68 +249,86 @@ export class HologramController {
             this.queueOffset;
 
 
-        // --------------------------------------------------------
-        // Novo deslocamento
-        // --------------------------------------------------------
+        // Nova posição
 
         this.queueOffset =
             (
-                (
-                    this.queueOffset +
-                    direction
-                ) %
-                len +
+                this.queueOffset +
+                direction +
                 len
-            ) %
-            len;
+            ) % len;
 
 
-        // --------------------------------------------------------
-        // Emoção que entra e sai
-        // --------------------------------------------------------
+        let inEmotion;
+        let outEmotion;
 
-        const inEmotion =
-            direction > 0
-                ? this.emotionQueue[
-                    (this.queueOffset + 3) % len
-                ]
-                : this.emotionQueue[
+
+        if (direction > 0) {
+
+            // Indo para a direita:
+            // a nova emoção que entra fica no final
+
+            inEmotion =
+                this.emotionQueue[
+                    (
+                        this.queueOffset + 3
+                    ) % len
+                ];
+
+
+            // A que saiu era a primeira
+
+            outEmotion =
+                this.emotionQueue[
+                    previousOffset
+                ];
+
+        } else {
+
+            // Indo para a esquerda:
+            // a nova emoção entra no início
+
+            inEmotion =
+                this.emotionQueue[
                     this.queueOffset
                 ];
 
 
-        const outEmotion =
-            direction > 0
-                ? this.emotionQueue[
-                    previousOffset % len
-                ]
-                : this.emotionQueue[
-                    (previousOffset + 3) % len
+            // A que saiu era a última
+
+            outEmotion =
+                this.emotionQueue[
+                    (
+                        previousOffset + 3
+                    ) % len
                 ];
 
+        }
 
-        // --------------------------------------------------------
-        // Aplica novo quadro
-        // --------------------------------------------------------
 
-        this._applyCarouselFrame(
-            direction,
-            inEmotion,
-            outEmotion
-        );
+        const faceEmotions =
+            this._applyCarouselFrame(
+                direction,
+                inEmotion,
+                outEmotion
+            );
 
 
         return {
+
             inEmotion,
             outEmotion,
-            direction
+            direction,
+            faceEmotions
+
         };
+
     }
 
 
-    // ============================================================
+    // =========================================================
     // APLICA QUADRO DO CARROSSEL
-    // ============================================================
+    // =========================================================
 
     _applyCarouselFrame(
         direction = 0,
@@ -303,10 +344,6 @@ export class HologramController {
             this._getEls();
 
 
-        // --------------------------------------------------------
-        // Monta estado atual das quatro faces
-        // --------------------------------------------------------
-
         const faceEmotions =
             this._faceIds.map(
                 (id, i) => {
@@ -316,39 +353,42 @@ export class HologramController {
                             (
                                 this.queueOffset +
                                 i
-                            ) %
-                            len
+                            ) % len
                         ];
+
+
+                    const filter =
+                        this.filters[emotion] ||
+                        this.filters.neutral;
 
 
                     return {
 
                         face: id,
 
-                        emotion: emotion,
+                        emotion,
 
                         label:
-                            this.emotionPT[emotion] ||
+                            this.emotionPT[
+                                emotion
+                            ] ||
                             emotion.toUpperCase(),
 
                         color:
-                            (
-                                this.filters[emotion] ||
-                                this.filters.neutral
-                            ).color
+                            filter.color
+
                     };
+
                 }
             );
 
 
-        // --------------------------------------------------------
-        // Aplica filtros
-        // --------------------------------------------------------
+        // =====================================================
+        // APLICA VISUAL
+        // =====================================================
 
         faceEmotions.forEach(
-            ({
-                emotion
-            }, i) => {
+            ({ emotion }, i) => {
 
                 const el =
                     els[i];
@@ -359,29 +399,25 @@ export class HologramController {
                 }
 
 
-                const f =
+                const filter =
                     this.filters[emotion] ||
                     this.filters.neutral;
 
 
                 el.style.filter =
-                    f.css;
+                    filter.css;
 
 
                 el.style.opacity =
-                    1;
+                    '1';
+
             }
         );
 
 
-        // --------------------------------------------------------
-        // CALLBACK
-        //
-        // IMPORTANTE:
-        // neste momento o videoTop JÁ foi atualizado.
-        //
-        // Portanto faceEmotions contém o estado NOVO.
-        // --------------------------------------------------------
+        // =====================================================
+        // AVISA O MAIN
+        // =====================================================
 
         if (
             typeof this._onCarouselChange ===
@@ -394,13 +430,18 @@ export class HologramController {
                 outEmotion,
                 direction
             );
+
         }
+
+
+        return faceEmotions;
+
     }
 
 
-    // ============================================================
-    // RETORNA ESTADO ATUAL
-    // ============================================================
+    // =========================================================
+    // EMOÇÕES ATUAIS
+    // =========================================================
 
     getCurrentFaceEmotions() {
 
@@ -416,59 +457,59 @@ export class HologramController {
                         (
                             this.queueOffset +
                             i
-                        ) %
-                        len
+                        ) % len
                     ];
+
+
+                const filter =
+                    this.filters[emotion] ||
+                    this.filters.neutral;
 
 
                 return {
 
                     face: id,
 
-                    emotion: emotion,
+                    emotion,
 
                     label:
-                        this.emotionPT[emotion] ||
+                        this.emotionPT[
+                            emotion
+                        ] ||
                         emotion.toUpperCase(),
 
                     color:
-                        (
-                            this.filters[emotion] ||
-                            this.filters.neutral
-                        ).color
+                        filter.color
+
                 };
+
             }
         );
+
     }
 
 
-    // ============================================================
-    // LABEL
-    // ============================================================
+    // =========================================================
+    // UTILITÁRIOS
+    // =========================================================
 
-    getEmotionLabel(
-        emotion
-    ) {
+    getEmotionLabel(emotion) {
 
         return (
             this.emotionPT[emotion] ||
-            emotion.toUpperCase()
+            String(emotion).toUpperCase()
         );
+
     }
 
 
-    // ============================================================
-    // COR DO FILTRO
-    // ============================================================
-
-    getFilterColor(
-        emotion
-    ) {
+    getFilterColor(emotion) {
 
         return (
             this.filters[emotion] ||
             this.filters.neutral
         ).color;
-    }
-}
 
+    }
+
+}
