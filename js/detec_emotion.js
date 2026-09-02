@@ -428,7 +428,7 @@ export class EmotionController {
 
                 inputSize: 320,
 
-                scoreThreshold: 0.4
+                scoreThreshold: 0.25
 
             });
 
