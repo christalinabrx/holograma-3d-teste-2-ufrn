@@ -430,6 +430,12 @@ async function start() {
                 );
 
 
+                // =================================================
+                // NO CARROSSEL:
+                // a detecção continua rodando, mas as emoções
+                // não alteram o holograma nem o áudio.
+                // =================================================
+
                 if (carouselActive) {
                     return;
                 }
@@ -805,7 +811,7 @@ function stopAudio() {
 
 function toggleCarousel() {
 
-    if (!hCtrl) {
+    if (!hCtrl || !eCtrl) {
         return;
     }
 
@@ -850,11 +856,21 @@ function toggleCarousel() {
         );
 
 
+    // ========================================================
+    // CARROSSEL ATIVADO
+    // ========================================================
+
     if (carouselActive) {
 
-        eCtrl.active =
-            false;
-
+        // ----------------------------------------------------
+        // IMPORTANTE:
+        // NÃO fazemos:
+        //
+        // eCtrl.active = false;
+        //
+        // O EmotionController precisa continuar ativo para que
+        // MediaPipe continue atualizando a segmentação da câmera.
+        // ----------------------------------------------------
 
         eCtrl.carouselMode =
             true;
@@ -931,11 +947,26 @@ function toggleCarousel() {
             0
         );
 
+
+        console.log(
+            'Carrossel ativado — segmentação continua ativa.'
+        );
+
+
+    // ========================================================
+    // CARROSSEL DESATIVADO
+    // ========================================================
+
     } else {
 
-        eCtrl.active =
-            true;
-
+        // ----------------------------------------------------
+        // NÃO precisamos reativar eCtrl.active.
+        //
+        // Ele nunca foi desligado.
+        //
+        // Isso permite que os loops de MediaPipe e câmera
+        // tenham continuado durante todo o carrossel.
+        // ----------------------------------------------------
 
         eCtrl.carouselMode =
             false;
@@ -991,6 +1022,11 @@ function toggleCarousel() {
         updateStatus(
             'Holograma Online',
             'success'
+        );
+
+
+        console.log(
+            'Carrossel desativado — segmentação continua ativa.'
         );
     }
 }
