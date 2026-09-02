@@ -1,4 +1,5 @@
 import { HolographicTears } from './holographic_tears.js';
+import { AngryEffects } from './angry_effects.js';
 
 export class EmotionController {
 
@@ -38,6 +39,14 @@ export class EmotionController {
 
         this._tears =
             new HolographicTears();
+
+
+        // =====================================================
+        // SISTEMA PROCEDURAL DE EFEITOS — ANGRY
+        // =====================================================
+
+        this._angryEffects =
+            new AngryEffects();
 
 
         // =====================================================
@@ -155,16 +164,6 @@ export class EmotionController {
          * IMPORTANTE:
          *
          * Essa proteção NÃO é aplicada às outras emoções.
-         *
-         * Portanto:
-         *
-         * FELIZ -> TRISTE
-         * FELIZ -> RAIVA
-         * TRISTE -> FELIZ
-         * RAIVA -> SURPRESO
-         *
-         * continuam obedecendo apenas aos tempos normais de
-         * estabilização.
          */
 
         this._neutralExitDelay = 3000;
@@ -174,12 +173,7 @@ export class EmotionController {
         // MOMENTOS DE CONTROLE
         // =====================================================
 
-        // Momento em que a emoção atual foi confirmada.
-
         this._emotionStartTime = 0;
-
-
-        // Momento em que a emoção candidata começou.
 
         this._candidateStartTime = 0;
 
@@ -228,6 +222,10 @@ export class EmotionController {
         // =====================================================
         // LOOP VISUAL
         // =====================================================
+
+        this._lastRenderTime =
+            performance.now();
+
 
         this._renderLoop();
     }
@@ -523,6 +521,30 @@ export class EmotionController {
 
         this._lastFaceDetectionTime =
             0;
+
+
+        // =====================================================
+        // RESET EFEITO ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                'neutral',
+                0
+            );
+
+        }
+
+
+        // =====================================================
+        // RESET TEMPO DO LOOP VISUAL
+        // =====================================================
+
+        this._lastRenderTime =
+            performance.now();
 
 
         // =====================================================
@@ -1411,14 +1433,6 @@ export class EmotionController {
             this._lastEmotion
         ) {
 
-            /*
-             * A emoção atual voltou a ser dominante.
-             *
-             * Portanto cancelamos imediatamente a candidata.
-             * Isso evita que uma pequena oscilação do
-             * face-api.js provoque uma mudança.
-             */
-
             this._candidateEmotion =
                 null;
 
@@ -1499,31 +1513,6 @@ export class EmotionController {
         // =====================================================
         // PROTEÇÃO ESPECIAL — SOMENTE PARA NEUTRO
         // =====================================================
-
-        /*
-         * IMPORTANTE:
-         *
-         * Os 3 segundos são aplicados SOMENTE quando a nova
-         * emoção candidata é NEUTRO.
-         *
-         * Assim:
-         *
-         * FELIZ -> NEUTRO
-         * TRISTE -> NEUTRO
-         * RAIVA -> NEUTRO
-         *
-         * precisam de 3 segundos de estabilidade.
-         *
-         * Já:
-         *
-         * FELIZ -> TRISTE
-         * FELIZ -> RAIVA
-         * TRISTE -> FELIZ
-         * RAIVA -> SURPRESO
-         *
-         * continuam usando apenas o tempo normal de
-         * transição.
-         */
 
         if (
             dominantEmotion === 'neutral' &&
@@ -1651,6 +1640,21 @@ export class EmotionController {
 
 
         // =====================================================
+        // ATUALIZA EFEITOS ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                emotion,
+                confidence
+            );
+        }
+
+
+        // =====================================================
         // ENVIA PARA O SISTEMA PRINCIPAL
         // =====================================================
 
@@ -1659,11 +1663,8 @@ export class EmotionController {
         ) {
 
             this.onEmotionChange(
-
                 emotion,
-
                 confidence
-
             );
         }
     }
@@ -1674,6 +1675,38 @@ export class EmotionController {
     // =========================================================
 
     _renderLoop() {
+
+        const now =
+            performance.now();
+
+
+        const delta =
+            now -
+            this._lastRenderTime;
+
+
+        this._lastRenderTime =
+            now;
+
+
+        // =====================================================
+        // ATUALIZA EFEITOS ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.update(
+                delta
+            );
+
+        }
+
+
+        // =====================================================
+        // DESENHA
+        // =====================================================
 
         this._drawAll();
 
@@ -2162,6 +2195,39 @@ export class EmotionController {
 
             );
         }
+
+
+        // =====================================================
+        // EFEITOS ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.draw(
+
+                ctx,
+
+                {
+
+                    drawX:
+                        drawX,
+
+                    drawY:
+                        drawY,
+
+                    drawWidth:
+                        drawWidth,
+
+                    drawHeight:
+                        drawHeight
+
+                }
+
+            );
+
+        }
     }
 
 
@@ -2178,12 +2244,74 @@ export class EmotionController {
     }
 
 
+    // =========================================================
+    // MODO CARROSSEL
+    // =========================================================
+
     setCarouselMode(
         enabled
     ) {
 
         this.carouselMode =
             Boolean(enabled);
+    }
+
+
+    // =========================================================
+    // DEFINE EMOÇÃO VISUAL DO CARROSSEL
+    // =========================================================
+
+    setCarouselEmotion(
+        emotion
+    ) {
+
+        if (
+            !this.carouselMode
+        ) {
+
+            return;
+        }
+
+
+        if (
+            !emotion
+        ) {
+
+            return;
+        }
+
+
+        // =====================================================
+        // ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                emotion,
+                1
+            );
+
+        }
+
+
+        // =====================================================
+        // LÁGRIMAS
+        // =====================================================
+
+        if (
+            this._tears
+        ) {
+
+            this._tears.setEmotion(
+                emotion,
+                1
+            );
+
+        }
+
     }
 
 
@@ -2263,6 +2391,22 @@ export class EmotionController {
 
         this._candidateStartTime =
             0;
+
+
+        // =====================================================
+        // RESET EFEITO ANGRY
+        // =====================================================
+
+        if (
+            this._angryEffects
+        ) {
+
+            this._angryEffects.setEmotion(
+                'neutral',
+                0
+            );
+
+        }
 
 
         console.log(
