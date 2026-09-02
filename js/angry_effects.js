@@ -1,3 +1,4 @@
+
 // ============================================================
 // ANGRY EFFECTS
 // Sistema procedural de efeitos visuais para a emoção ANGRY
@@ -5,6 +6,7 @@
 // Conceito:
 // - tensão
 // - halo vermelho intenso
+// - halo compacto e preso à cabeça
 // - glitch da própria imagem segmentada
 // - fragmentação da cabeça
 // - partículas explosivas
@@ -19,6 +21,11 @@
 // Compatível com:
 // - detecção normal
 // - modo carrossel
+//
+// NOVO:
+// - Halo aproximadamente 40% menor
+// - Halo e raios acompanham a cabeça
+// - Efeito usa coordenadas da cabeça quando fornecidas
 // ============================================================
 
 
@@ -52,6 +59,29 @@ export class AngryEffects {
 
 
         // =====================================================
+        // CENTRO DO EFEITO
+        //
+        // Guarda a última posição conhecida da cabeça.
+        // Isso evita saltos quando a detecção oscila.
+        // =====================================================
+
+        this.headX =
+            null;
+
+
+        this.headY =
+            null;
+
+
+        this.headRadius =
+            null;
+
+
+        this.headSmoothing =
+            0.18;
+
+
+        // =====================================================
         // CONFIGURAÇÃO
         // =====================================================
 
@@ -59,7 +89,6 @@ export class AngryEffects {
 
             // -------------------------------------------------
             // Movimento muito mais lento.
-            // O efeito não fica "piscando".
             // -------------------------------------------------
 
             pulseSpeed:
@@ -104,9 +133,6 @@ export class AngryEffects {
             glitchDuration:
                 90,
 
-
-            // Quantidade de pedaços reais da imagem
-            // deslocados durante o glitch.
 
             maxImageGlitches:
                 22,
@@ -209,9 +235,6 @@ export class AngryEffects {
 
         // =====================================================
         // FLASH
-        //
-        // Mantido apenas para pequenos acentos.
-        // Não existe mais flash de tela.
         // =====================================================
 
         this.flash =
@@ -368,10 +391,6 @@ export class AngryEffects {
                     );
 
 
-                // -------------------------------------------------
-                // Cria os pedaços reais da imagem
-                // -------------------------------------------------
-
                 this._spawnImageGlitches();
 
             }
@@ -441,9 +460,6 @@ export class AngryEffects {
                     Math.random() *
                     0.40;
 
-
-                // Flash extremamente discreto.
-                // Não é mais usado como flash da tela.
 
                 this.flash =
                     0.05 +
@@ -702,9 +718,6 @@ export class AngryEffects {
                 dt;
 
 
-            // Pequena turbulência.
-            // Faz as partículas parecerem flutuantes.
-
             particle.vx +=
                 Math.sin(
                     this.time *
@@ -844,16 +857,30 @@ export class AngryEffects {
         }
 
 
+        // =====================================================
+        // POSIÇÃO DA CABEÇA
+        // =====================================================
+
+        const head =
+            this._resolveHeadPosition(
+                options,
+                drawX,
+                drawY,
+                drawWidth,
+                drawHeight
+            );
+
+
         const cx =
-            drawX +
-            drawWidth /
-            2;
+            head.x;
 
 
         const cy =
-            drawY +
-            drawHeight *
-            0.45;
+            head.y;
+
+
+        const headRadius =
+            head.radius;
 
 
         // =====================================================
@@ -898,6 +925,14 @@ export class AngryEffects {
 
         // =====================================================
         // HALO EXTERNO
+        //
+        // REDUZIDO EM ~40%
+        //
+        // Antes:
+        // 0.40 + tension * 0.18
+        //
+        // Agora:
+        // 0.24 + tension * 0.108
         // =====================================================
 
         const minSize =
@@ -907,12 +942,28 @@ export class AngryEffects {
             );
 
 
+        // -----------------------------------------------------
+        // Usa a cabeça como referência quando possível.
+        // Isso deixa o halo proporcional ao rosto.
+        // -----------------------------------------------------
+
+        const baseHeadSize =
+            headRadius > 0
+
+                ? headRadius * 2.6
+
+                : minSize;
+
+
         const glowRadius =
-            minSize *
-            (
-                0.40 +
-                tension *
-                0.18
+            Math.min(
+                minSize * 0.34,
+                baseHeadSize *
+                (
+                    0.78 +
+                    tension *
+                    0.20
+                )
             );
 
 
@@ -985,17 +1036,15 @@ export class AngryEffects {
 
 
         ctx.fillRect(
-            drawX -
+            cx -
             glowRadius,
 
-            drawY -
+            cy -
             glowRadius,
 
-            drawWidth +
             glowRadius *
             2,
 
-            drawHeight +
             glowRadius *
             2
         );
@@ -1003,14 +1052,19 @@ export class AngryEffects {
 
         // =====================================================
         // SEGUNDO HALO MAIS PRÓXIMO DA CABEÇA
+        //
+        // Também reduzido em aproximadamente 40%.
         // =====================================================
 
         const innerRadius =
-            minSize *
-            (
-                0.25 +
-                tension *
-                0.12
+            Math.min(
+                minSize * 0.21,
+                headRadius *
+                (
+                    0.62 +
+                    tension *
+                    0.20
+                )
             );
 
 
@@ -1063,18 +1117,23 @@ export class AngryEffects {
             innerGradient;
 
 
-        ctx.fillRect(
-            drawX,
-            drawY,
-            drawWidth,
-            drawHeight
+        ctx.beginPath();
+
+
+        ctx.arc(
+            cx,
+            cy,
+            innerRadius,
+            0,
+            Math.PI * 2
         );
+
+
+        ctx.fill();
 
 
         // =====================================================
         // PEQUENO ACENTO DE LUZ
-        //
-        // Não é mais um flash de tela.
         // =====================================================
 
         if (
@@ -1100,8 +1159,11 @@ export class AngryEffects {
             ctx.arc(
                 cx,
                 cy,
-                minSize *
-                0.025,
+                Math.max(
+                    4,
+                    headRadius *
+                    0.055
+                ),
                 0,
                 Math.PI * 2
             );
@@ -1156,30 +1218,36 @@ export class AngryEffects {
 
         // =====================================================
         // FRAGMENTOS GEOMÉTRICOS
+        //
+        // Agora também são relativos à cabeça.
         // =====================================================
 
         this._drawFragments(
             ctx,
             tension,
-            drawX,
-            drawY
+            cx,
+            cy
         );
 
 
         // =====================================================
         // PARTÍCULAS
+        //
+        // Agora acompanham a cabeça.
         // =====================================================
 
         this._drawParticles(
             ctx,
             tension,
-            drawX,
-            drawY
+            cx,
+            cy
         );
 
 
         // =====================================================
         // RAIOS DE ENERGIA
+        //
+        // REDUZIDOS EM ~40%.
         // =====================================================
 
         this._drawEnergyCracks(
@@ -1188,6 +1256,7 @@ export class AngryEffects {
             cy,
             drawWidth,
             drawHeight,
+            headRadius,
             tension,
             peak
         );
@@ -1199,12 +1268,296 @@ export class AngryEffects {
 
 
     // =========================================================
+    // RESOLVE A POSIÇÃO DA CABEÇA
+    //
+    // Aceita várias formas para facilitar a integração com o
+    // detect_emotion.js atual.
+    // =========================================================
+
+    _resolveHeadPosition(
+        options,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight
+    ) {
+
+        let x = null;
+        let y = null;
+        let radius = null;
+
+
+        // =====================================================
+        // FORMATO 1
+        //
+        // options.head = {
+        //     x,
+        //     y,
+        //     radius
+        // }
+        // =====================================================
+
+        if (
+            options.head &&
+            Number.isFinite(options.head.x) &&
+            Number.isFinite(options.head.y)
+        ) {
+
+            x =
+                options.head.x;
+
+            y =
+                options.head.y;
+
+            radius =
+                Number.isFinite(
+                    options.head.radius
+                )
+                    ? options.head.radius
+                    : null;
+
+        }
+
+
+        // =====================================================
+        // FORMATO 2
+        //
+        // options.faceBox
+        //
+        // { x, y, width, height }
+        // =====================================================
+
+        else if (
+            options.faceBox &&
+            Number.isFinite(options.faceBox.x) &&
+            Number.isFinite(options.faceBox.y)
+        ) {
+
+            const box =
+                options.faceBox;
+
+
+            x =
+                box.x +
+                box.width /
+                2;
+
+
+            y =
+                box.y +
+                box.height *
+                0.45;
+
+
+            radius =
+                Math.min(
+                    box.width,
+                    box.height
+                ) /
+                2;
+
+        }
+
+
+        // =====================================================
+        // FORMATO 3
+        //
+        // options.headBox
+        // =====================================================
+
+        else if (
+            options.headBox &&
+            Number.isFinite(options.headBox.x) &&
+            Number.isFinite(options.headBox.y)
+        ) {
+
+            const box =
+                options.headBox;
+
+
+            x =
+                box.x +
+                box.width /
+                2;
+
+
+            y =
+                box.y +
+                box.height *
+                0.45;
+
+
+            radius =
+                Math.min(
+                    box.width,
+                    box.height
+                ) /
+                2;
+
+        }
+
+
+        // =====================================================
+        // FORMATO 4
+        //
+        // Coordenadas individuais.
+        // =====================================================
+
+        else if (
+            Number.isFinite(
+                options.headCenterX
+            ) &&
+            Number.isFinite(
+                options.headCenterY
+            )
+        ) {
+
+            x =
+                options.headCenterX;
+
+
+            y =
+                options.headCenterY;
+
+
+            radius =
+                Number.isFinite(
+                    options.headRadius
+                )
+                    ? options.headRadius
+                    : null;
+
+        }
+
+
+        // =====================================================
+        // FALLBACK
+        // =====================================================
+
+        if (
+            !Number.isFinite(x) ||
+            !Number.isFinite(y)
+        ) {
+
+            x =
+                drawX +
+                drawWidth /
+                2;
+
+
+            y =
+                drawY +
+                drawHeight *
+                0.45;
+
+        }
+
+
+        // =====================================================
+        // RAIO PADRÃO
+        // =====================================================
+
+        if (
+            !Number.isFinite(radius) ||
+            radius <= 0
+        ) {
+
+            radius =
+                Math.min(
+                    drawWidth,
+                    drawHeight
+                ) *
+                0.16;
+
+        }
+
+
+        // =====================================================
+        // SUAVIZAÇÃO DA POSIÇÃO
+        //
+        // Evita que o halo dê pequenos "saltos" quando
+        // o detector muda alguns pixels.
+        // =====================================================
+
+        if (
+            Number.isFinite(
+                this.headX
+            ) &&
+            Number.isFinite(
+                this.headY
+            )
+        ) {
+
+            this.headX +=
+                (
+                    x -
+                    this.headX
+                ) *
+                this.headSmoothing;
+
+
+            this.headY +=
+                (
+                    y -
+                    this.headY
+                ) *
+                this.headSmoothing;
+
+
+            if (
+                Number.isFinite(
+                    this.headRadius
+                )
+            ) {
+
+                this.headRadius +=
+                    (
+                        radius -
+                        this.headRadius
+                    ) *
+                    this.headSmoothing;
+
+            } else {
+
+                this.headRadius =
+                    radius;
+
+            }
+
+        } else {
+
+            this.headX =
+                x;
+
+
+            this.headY =
+                y;
+
+
+            this.headRadius =
+                radius;
+
+        }
+
+
+        return {
+
+            x:
+                this.headX,
+
+            y:
+                this.headY,
+
+            radius:
+                this.headRadius
+
+        };
+
+    }
+
+
+    // =========================================================
     // GLITCH DA PRÓPRIA IMAGEM SEGMENTADA
-    //
-    // Não existem barras.
-    //
-    // Pequenos pedaços reais da imagem da cabeça são
-    // deslocados radialmente para fora.
     // =========================================================
 
     _drawImageGlitches(
@@ -1279,46 +1632,38 @@ export class AngryEffects {
             }
 
 
-            // ---------------------------------------------
-            // Coordenada da origem dentro da cabeça
-            // ---------------------------------------------
-
             const sx =
                 sourceX +
-                glitch.x;
+                glitch.x *
+                sourceWidth;
 
 
             const sy =
                 sourceY +
-                glitch.y;
+                glitch.y *
+                sourceHeight;
 
 
             const sw =
-                glitch.width;
+                glitch.width *
+                sourceWidth;
 
 
             const sh =
-                glitch.height;
+                glitch.height *
+                sourceHeight;
 
-
-            // ---------------------------------------------
-            // Converte para o espaço do holograma
-            // ---------------------------------------------
 
             const baseX =
                 drawX +
-                (
-                    glitch.x *
-                    scaleX
-                );
+                glitch.x *
+                drawWidth;
 
 
             const baseY =
                 drawY +
-                (
-                    glitch.y *
-                    scaleY
-                );
+                glitch.y *
+                drawHeight;
 
 
             const dw =
@@ -1331,20 +1676,16 @@ export class AngryEffects {
                 scaleY;
 
 
-            // ---------------------------------------------
-            // Deslocamento radial
-            // ---------------------------------------------
-
             const destX =
                 baseX +
                 glitch.offsetX *
-                scaleX;
+                drawWidth;
 
 
             const destY =
                 baseY +
                 glitch.offsetY *
-                scaleY;
+                drawHeight;
 
 
             ctx.save();
@@ -1353,8 +1694,6 @@ export class AngryEffects {
             ctx.globalAlpha =
                 alpha;
 
-
-            // Pequena rotação em alguns fragmentos.
 
             if (
                 Math.abs(
@@ -1365,10 +1704,12 @@ export class AngryEffects {
 
                 ctx.translate(
                     destX +
-                    dw / 2,
+                    dw /
+                    2,
 
                     destY +
-                    dh / 2
+                    dh /
+                    2
                 );
 
 
@@ -1386,8 +1727,12 @@ export class AngryEffects {
                     sw,
                     sh,
 
-                    -dw / 2,
-                    -dh / 2,
+                    -dw /
+                    2,
+
+                    -dh /
+                    2,
+
                     dw,
                     dh
 
@@ -1431,8 +1776,8 @@ export class AngryEffects {
     _drawFragments(
         ctx,
         intensity,
-        drawX,
-        drawY
+        cx,
+        cy
     ) {
 
         for (
@@ -1466,9 +1811,10 @@ export class AngryEffects {
 
 
             ctx.translate(
-                drawX +
+                cx +
                 fragment.x,
-                drawY +
+
+                cy +
                 fragment.y
             );
 
@@ -1515,8 +1861,8 @@ export class AngryEffects {
     _drawParticles(
         ctx,
         intensity,
-        drawX,
-        drawY
+        cx,
+        cy
     ) {
 
         for (
@@ -1571,8 +1917,15 @@ export class AngryEffects {
                 particle.color;
 
 
-            // Partículas maiores possuem uma pequena
-            // aura própria.
+            const px =
+                cx +
+                particle.x;
+
+
+            const py =
+                cy +
+                particle.y;
+
 
             if (
                 particle.glow
@@ -1592,11 +1945,9 @@ export class AngryEffects {
 
                 ctx.fillRect(
 
-                    drawX +
-                    particle.x,
+                    px,
 
-                    drawY +
-                    particle.y,
+                    py,
 
                     particle.size,
 
@@ -1611,11 +1962,9 @@ export class AngryEffects {
 
                 ctx.fillRect(
 
-                    drawX +
-                    particle.x,
+                    px,
 
-                    drawY +
-                    particle.y,
+                    py,
 
                     particle.size,
 
@@ -1637,8 +1986,11 @@ export class AngryEffects {
     // =========================================================
     // RAIOS / ENERGIA
     //
-    // São raios radiais, não barras de glitch.
-    // Movimento contínuo e suave.
+    // Agora:
+    // - menores
+    // - centrados na cabeça
+    // - acompanham o movimento facial
+    // - continuam com pequeno movimento orgânico
     // =========================================================
 
     _drawEnergyCracks(
@@ -1647,6 +1999,7 @@ export class AngryEffects {
         cy,
         width,
         height,
+        headRadius,
         intensity,
         peak
     ) {
@@ -1666,6 +2019,22 @@ export class AngryEffects {
             Math.min(
                 width,
                 height
+            );
+
+
+        // =====================================================
+        // ESCALA DO HALO
+        //
+        // Aproximadamente 40% menor que a versão original.
+        // =====================================================
+
+        const compactSize =
+            Math.min(
+                minSize *
+                0.60,
+
+                headRadius *
+                2.55
             );
 
 
@@ -1693,6 +2062,10 @@ export class AngryEffects {
                 );
 
 
+            // -------------------------------------------------
+            // Pequena vibração angular.
+            // -------------------------------------------------
+
             const movement =
                 Math.sin(
                     this.time *
@@ -1709,11 +2082,14 @@ export class AngryEffects {
 
 
             // -------------------------------------------------
-            // Começa perto da cabeça
+            // Começa mais perto da cabeça.
+            //
+            // Antes: ~25% do canvas
+            // Agora: ~15%
             // -------------------------------------------------
 
             const startRadius =
-                minSize *
+                compactSize *
                 (
                     0.25 +
                     Math.sin(
@@ -1725,11 +2101,11 @@ export class AngryEffects {
 
 
             // -------------------------------------------------
-            // Raios mais longos
+            // Raios aproximadamente 40% menores.
             // -------------------------------------------------
 
             const length =
-                minSize *
+                compactSize *
                 (
                     0.07 +
                     intensity *
@@ -1796,7 +2172,7 @@ export class AngryEffects {
 
 
             // -------------------------------------------------
-            // Pequeno zigue-zague orgânico
+            // Pequeno zigue-zague orgânico.
             // -------------------------------------------------
 
             const middleRadius =
@@ -1895,14 +2271,6 @@ export class AngryEffects {
             }
 
 
-            // -------------------------------------------------
-            // A região é expressa em percentual aproximado
-            // da janela da cabeça.
-            //
-            // Isso mantém o efeito funcionando em diferentes
-            // resoluções.
-            // -------------------------------------------------
-
             const pseudoSourceWidth =
                 120;
 
@@ -1921,7 +2289,7 @@ export class AngryEffects {
                 pseudoSourceHeight;
 
 
-            const width =
+            const glitchWidth =
                 5 +
                 Math.random() *
                 (
@@ -1931,7 +2299,7 @@ export class AngryEffects {
                 );
 
 
-            const height =
+            const glitchHeight =
                 5 +
                 Math.random() *
                 (
@@ -1940,10 +2308,6 @@ export class AngryEffects {
                         : 24
                 );
 
-
-            // -------------------------------------------------
-            // Direção radial
-            // -------------------------------------------------
 
             const centerX =
                 pseudoSourceWidth /
@@ -1957,13 +2321,15 @@ export class AngryEffects {
 
             const dx =
                 x +
-                width / 2 -
+                glitchWidth /
+                2 -
                 centerX;
 
 
             const dy =
                 y +
-                height / 2 -
+                glitchHeight /
+                2 -
                 centerY;
 
 
@@ -2004,31 +2370,22 @@ export class AngryEffects {
 
             this.imageGlitches.push({
 
-                // Valores normalizados.
-                // Serão convertidos no draw.
-
                 x:
-                    (
-                        x /
-                        pseudoSourceWidth
-                    ),
+                    x /
+                    pseudoSourceWidth,
 
                 y:
-                    (
-                        y /
-                        pseudoSourceHeight
-                    ),
+                    y /
+                    pseudoSourceHeight,
 
                 width:
-                    width /
+                    glitchWidth /
                     pseudoSourceWidth,
 
                 height:
-                    height /
+                    glitchHeight /
                     pseudoSourceHeight,
 
-
-                // Offset normalizado.
 
                 offsetX:
                     dirX *
@@ -2040,8 +2397,6 @@ export class AngryEffects {
                     outward /
                     180,
 
-
-                // Pequeno movimento.
 
                 vx:
                     dirX *
@@ -2301,10 +2656,6 @@ export class AngryEffects {
             2;
 
 
-        // -----------------------------------------------------
-        // Partículas nascem na periferia da cabeça.
-        // -----------------------------------------------------
-
         const radius =
             explosion
 
@@ -2347,10 +2698,6 @@ export class AngryEffects {
             radius *
             0.78;
 
-
-        // -----------------------------------------------------
-        // Pequena variação vertical.
-        // -----------------------------------------------------
 
         const verticalLift =
             explosion
@@ -2448,7 +2795,9 @@ export class AngryEffects {
                     : (
                         Math.random() >
                         0.45
+
                             ? '#ff7777'
+
                             : '#ffb0b0'
                     ),
 
@@ -2488,3 +2837,4 @@ export class AngryEffects {
     }
 
 }
+
