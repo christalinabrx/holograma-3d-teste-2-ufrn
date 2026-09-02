@@ -23,7 +23,6 @@
 
 export class AngryEffects {
 
-
     constructor() {
 
         // =====================================================
@@ -47,79 +46,65 @@ export class AngryEffects {
 
         this.config = {
 
-            // Movimento lento.
-            // O efeito não fica piscando.
-
-            pulseSpeed:
-                0.0018,
+            // Movimento lento do efeito.
+            pulseSpeed: 0.0018,
 
 
             // -------------------------------------------------
             // HALO
             // -------------------------------------------------
 
-            maxGlow:
-                0.72,
+            maxGlow: 0.72,
 
 
             // -------------------------------------------------
             // FRAGMENTOS
             // -------------------------------------------------
 
-            maxFragments:
-                34,
+            maxFragments: 34,
 
 
             // -------------------------------------------------
             // PARTÍCULAS
             // -------------------------------------------------
 
-            maxParticles:
-                150,
+            maxParticles: 150,
 
 
             // -------------------------------------------------
             // GLITCH
             // -------------------------------------------------
 
-            glitchIntervalMin:
-                550,
+            glitchIntervalMin: 550,
 
-            glitchIntervalMax:
-                1400,
+            glitchIntervalMax: 1400,
 
-            glitchDuration:
-                85,
+            glitchDuration: 85,
 
-            maxImageGlitches:
-                26,
+            maxImageGlitches: 26,
 
 
             // -------------------------------------------------
             // PICOS
             // -------------------------------------------------
 
-            peakIntervalMin:
-                1500,
+            peakIntervalMin: 1500,
 
-            peakIntervalMax:
-                3300,
+            peakIntervalMax: 3300,
 
 
             // -------------------------------------------------
             // EMISSÃO DE PARTÍCULAS
             // -------------------------------------------------
 
-            particleEmissionRate:
-                0.09,
+            particleEmissionRate: 0.09,
 
 
             // -------------------------------------------------
             // RAIOS
             // -------------------------------------------------
 
-            rayCount:
-                22
+            rayCount: 22
 
         };
 
@@ -184,7 +169,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // PEQUENO BRILHO DE IMPACTO
+        // BRILHO DE IMPACTO
         // =====================================================
 
         this.flash = 0;
@@ -436,9 +421,6 @@ export class AngryEffects {
                     Math.random() *
                     0.40;
 
-
-                // Muito discreto.
-                // Não pisca a tela.
 
                 this.flash =
                     0.04 +
@@ -836,6 +818,10 @@ export class AngryEffects {
             this.haloShakeY;
 
 
+        // =====================================================
+        // PULSO
+        // =====================================================
+
         const pulse =
             (
                 Math.sin(
@@ -886,7 +872,7 @@ export class AngryEffects {
 
 
         // =====================================================
-        // EFEITO DE CHAMA SOBRE A PESSOA
+        // CHAMA SOBRE A PESSOA
         // =====================================================
 
         if (
@@ -1018,10 +1004,6 @@ export class AngryEffects {
         peak
     ) {
 
-        // -----------------------------------------------------
-        // Descobre quanto espaço existe até cada borda.
-        // -----------------------------------------------------
-
         const left =
             cx - x;
 
@@ -1039,7 +1021,7 @@ export class AngryEffects {
             cy;
 
 
-        // O halo nunca pode ultrapassar o canvas.
+        // Mantém o halo dentro dos limites do vídeo.
 
         const maxRadius =
             Math.max(
@@ -1055,8 +1037,7 @@ export class AngryEffects {
 
         const radius =
             Math.min(
-                maxRadius *
-                0.92,
+                maxRadius * 0.92,
 
                 Math.min(
                     width,
@@ -1071,9 +1052,9 @@ export class AngryEffects {
             );
 
 
-        // -----------------------------------------------------
+        // =====================================================
         // HALO PRINCIPAL
-        // -----------------------------------------------------
+        // =====================================================
 
         const gradient =
             ctx.createRadialGradient(
@@ -1156,9 +1137,6 @@ export class AngryEffects {
             gradient;
 
 
-        // IMPORTANTE:
-        // o retângulo permanece dentro do canvas.
-
         ctx.fillRect(
             x,
             y,
@@ -1167,9 +1145,9 @@ export class AngryEffects {
         );
 
 
-        // -----------------------------------------------------
-        // PEQUENO NÚCLEO INCANDESCENTE
-        // -----------------------------------------------------
+        // =====================================================
+        // NÚCLEO INCANDESCENTE
+        // =====================================================
 
         const coreRadius =
             radius *
@@ -1258,12 +1236,7 @@ export class AngryEffects {
         ctx.save();
 
 
-        // -----------------------------------------------------
-        // O gradient é desenhado sobre a imagem já existente.
-        //
-        // "source-atop" faz com que ele permaneça somente
-        // onde já existe a pessoa.
-        // -----------------------------------------------------
+        // Mantém o efeito somente onde já existe conteúdo.
 
         ctx.globalCompositeOperation =
             'source-atop';
@@ -1285,7 +1258,9 @@ export class AngryEffects {
             );
 
 
-        // Base mais escura.
+        // =====================================================
+        // BASE ESCURA
+        // =====================================================
 
         gradient.addColorStop(
 
@@ -1300,7 +1275,9 @@ export class AngryEffects {
         );
 
 
-        // Vermelho.
+        // =====================================================
+        // VERMELHO
+        // =====================================================
 
         gradient.addColorStop(
 
@@ -1315,7 +1292,9 @@ export class AngryEffects {
         );
 
 
-        // Laranja.
+        // =====================================================
+        // LARANJA
+        // =====================================================
 
         gradient.addColorStop(
 
@@ -1330,7 +1309,9 @@ export class AngryEffects {
         );
 
 
-        // Amarelo incandescente.
+        // =====================================================
+        // AMARELO
+        // =====================================================
 
         gradient.addColorStop(
 
@@ -1345,7 +1326,9 @@ export class AngryEffects {
         );
 
 
-        // Ponta quente.
+        // =====================================================
+        // PONTA QUENTE
+        // =====================================================
 
         gradient.addColorStop(
 
@@ -1374,13 +1357,9 @@ export class AngryEffects {
         );
 
 
-        // -----------------------------------------------------
-        // MANCHAS DE CALOR
-        // -----------------------------------------------------
-
-        ctx.globalCompositeOperation =
-            'source-atop';
-
+        // =====================================================
+        // MANCHA DE CALOR
+        // =====================================================
 
         const heatX =
             drawX +
@@ -1477,12 +1456,11 @@ export class AngryEffects {
     // =========================================================
     // GLITCH DA PRÓPRIA IMAGEM
     //
-    // ATENÇÃO:
-    // Não desenha linhas.
-    // Não desenha barras.
-    // Não desenha retângulos coloridos.
+    // NÃO desenha linhas.
+    // NÃO desenha barras coloridas.
+    // NÃO cria retângulos sólidos.
     //
-    // Todos os pixels vêm do personCanvas.
+    // Os pixels utilizados vêm exclusivamente do personCanvas.
     // =========================================================
 
     _drawImageGlitches(
@@ -1557,6 +1535,10 @@ export class AngryEffects {
             }
 
 
+            // =================================================
+            // FONTE
+            // =================================================
+
             const sx =
                 sourceX +
                 glitch.x *
@@ -1584,6 +1566,10 @@ export class AngryEffects {
                     sourceHeight
                 );
 
+
+            // =================================================
+            // DESTINO
+            // =================================================
 
             const baseX =
                 drawX +
@@ -1626,10 +1612,9 @@ export class AngryEffects {
                 alpha;
 
 
-            // -------------------------------------------------
-            // IMPORTANTE:
-            // sourceRect é sempre um pedaço da pessoa.
-            // -------------------------------------------------
+            // =================================================
+            // FRAGMENTO ROTACIONADO
+            // =================================================
 
             if (
                 Math.abs(
@@ -1671,6 +1656,10 @@ export class AngryEffects {
                 );
 
             } else {
+
+                // =================================================
+                // FRAGMENTO NORMAL
+                // =================================================
 
                 ctx.drawImage(
 
@@ -1876,9 +1865,9 @@ export class AngryEffects {
             }
 
 
-            // -------------------------------------------------
-            // Fagulha alongada
-            // -------------------------------------------------
+            // =================================================
+            // FAGULHA ALONGADA
+            // =================================================
 
             if (
                 particle.spark
@@ -1943,7 +1932,7 @@ export class AngryEffects {
 
 
     // =========================================================
-    // RAIOS
+    // RAIOS DE ENERGIA
     // =========================================================
 
     _drawEnergyCracks(
@@ -2001,6 +1990,8 @@ export class AngryEffects {
                     count
                 );
 
+
+            // Pequena movimentação contínua.
 
             const movement =
                 Math.sin(
@@ -2075,9 +2066,9 @@ export class AngryEffects {
                 0.18;
 
 
-            // -------------------------------------------------
-            // Mistura vermelho, laranja e amarelo.
-            // -------------------------------------------------
+            // =================================================
+            // CORES
+            // =================================================
 
             const rayColor =
                 i % 5 === 0
@@ -2134,6 +2125,10 @@ export class AngryEffects {
                 sy
             );
 
+
+            // =================================================
+            // QUEBRA CENTRAL DO RAIO
+            // =================================================
 
             const middleRadius =
                 length *
@@ -2232,9 +2227,9 @@ export class AngryEffects {
             }
 
 
-            // -------------------------------------------------
-            // Coordenadas normalizadas.
-            // -------------------------------------------------
+            // =================================================
+            // COORDENADAS NORMALIZADAS
+            // =================================================
 
             const x =
                 Math.random();
@@ -2266,9 +2261,9 @@ export class AngryEffects {
                 );
 
 
-            // -------------------------------------------------
-            // Centro da cabeça.
-            // -------------------------------------------------
+            // =================================================
+            // CENTRO DA CABEÇA
+            // =================================================
 
             const centerX =
                 0.50;
@@ -2308,9 +2303,9 @@ export class AngryEffects {
                 distance;
 
 
-            // -------------------------------------------------
-            // Quanto mais intenso, mais longe o pedaço voa.
-            // -------------------------------------------------
+            // =================================================
+            // MOVIMENTO PARA FORA
+            // =================================================
 
             const outward =
                 (
@@ -2660,6 +2655,10 @@ export class AngryEffects {
             0.78;
 
 
+        // =====================================================
+        // PALETA
+        // =====================================================
+
         const colors = [
 
             '#ff2020',
@@ -2677,8 +2676,8 @@ export class AngryEffects {
         ];
 
 
-        // Amarelo aparece menos que vermelho,
-        // mas agora existe de verdade.
+        // Vermelho continua predominante,
+        // mas existem tons quentes de laranja e amarelo.
 
         const colorIndex =
             Math.random() < 0.55
