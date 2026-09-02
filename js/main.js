@@ -1,3 +1,4 @@
+```javascript
 const CONFIG = {
     MODELS: 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'
 };
@@ -44,7 +45,6 @@ async function init() {
 
         const progress =
             document.getElementById('loadingProgress');
-
 
         console.log('Carregando modelos face-api.js...');
 
@@ -399,6 +399,10 @@ async function start() {
                 direction
             ) => {
 
+                // ------------------------------------------------
+                // ATUALIZA O WIDGET INFINITO
+                // ------------------------------------------------
+
                 updateInfinityWidget(
                     faceEmotions,
                     inEmotion,
@@ -407,9 +411,47 @@ async function start() {
                 );
 
 
+                // ------------------------------------------------
+                // ATUALIZA OS RÓTULOS
+                // ------------------------------------------------
+
                 updateCarouselLabels(
                     faceEmotions
                 );
+
+
+                // ------------------------------------------------
+                // ÁUDIO DO CARROSSEL
+                //
+                // O vídeo que está em videoTop determina
+                // qual música deve tocar.
+                // ------------------------------------------------
+
+                if (carouselActive) {
+
+                    const topFace =
+                        faceEmotions.find(
+                            item =>
+                                item.face === 'videoTop'
+                        );
+
+
+                    if (
+                        topFace &&
+                        topFace.emotion
+                    ) {
+
+                        console.log(
+                            'Carrossel — expressão no topo:',
+                            topFace.emotion
+                        );
+
+
+                        playEmotionAudio(
+                            topFace.emotion
+                        );
+                    }
+                }
             };
 
 
@@ -432,8 +474,13 @@ async function start() {
 
                 // =================================================
                 // NO CARROSSEL:
-                // a detecção continua rodando, mas as emoções
-                // não alteram o holograma nem o áudio.
+                //
+                // A detecção continua rodando, mas a expressão
+                // detectada pela câmera NÃO altera o holograma
+                // nem o áudio.
+                //
+                // O áudio é controlado exclusivamente pelo
+                // vídeo que está atualmente no topo.
                 // =================================================
 
                 if (carouselActive) {
@@ -612,16 +659,9 @@ function playEmotionAudio(
     emotion
 ) {
 
-    if (
-        emotion === currentEmotion
-    ) {
-
+    if (!emotion) {
         return;
     }
-
-
-    currentEmotion =
-        emotion;
 
 
     const src =
@@ -629,17 +669,55 @@ function playEmotionAudio(
 
 
     if (!src) {
+
+        console.warn(
+            'Áudio não encontrado para a emoção:',
+            emotion
+        );
+
         return;
     }
 
 
+    // --------------------------------------------------------
+    // Se já está tocando exatamente esta emoção,
+    // não reinicia a música.
+    // --------------------------------------------------------
+
+    if (
+        emotion === currentEmotion &&
+        currentAudio
+    ) {
+
+        return;
+    }
+
+
+    console.log(
+        'Trocando áudio:',
+        currentEmotion,
+        '→',
+        emotion
+    );
+
+
+    currentEmotion =
+        emotion;
+
+
     if (currentAudio) {
 
-        fadeOut(
-            currentAudio,
-            () => {
+        const oldAudio =
+            currentAudio;
 
-                currentAudio = null;
+
+        currentAudio =
+            null;
+
+
+        fadeOut(
+            oldAudio,
+            () => {
 
                 startAudio(src);
             }
@@ -695,6 +773,16 @@ function fadeOut(
     clearInterval(
         fadeInterval
     );
+
+
+    if (!audio) {
+
+        if (onDone) {
+            onDone();
+        }
+
+        return;
+    }
 
 
     const step =
@@ -863,26 +951,91 @@ function toggleCarousel() {
     if (carouselActive) {
 
         // ----------------------------------------------------
-        // IMPORTANTE:
-        // NÃO fazemos:
-        //
-        // eCtrl.active = false;
-        //
-        // O EmotionController precisa continuar ativo para que
-        // MediaPipe continue atualizando a segmentação da câmera.
+        // EmotionController continua ativo para que
+        // MediaPipe continue atualizando a segmentação.
         // ----------------------------------------------------
 
         eCtrl.carouselMode =
             true;
 
 
+        // ----------------------------------------------------
+        // Para qualquer música que estava tocando.
+        // ----------------------------------------------------
+
         stopAudio();
 
 
-        playEmotionAudio(
-            'carousel'
+        hCtrl.enableCarousel();
+
+
+        // ----------------------------------------------------
+        // IMPORTANTE:
+        //
+        // Depois de ativar o carrossel, descobrimos qual
+        // emoção está atualmente em videoTop e tocamos
+        // a música correspondente.
+        //
+        // Não usamos mais a música "carousel" como trilha
+        // principal enquanto o carrossel está rodando.
+        // ----------------------------------------------------
+
+        const faces =
+            hCtrl.getCurrentFaceEmotions();
+
+
+        updateCarouselLabels(
+            faces
         );
 
+
+        updateInfinityWidget(
+            faces,
+            null,
+            null,
+            0
+        );
+
+
+        const topFace =
+            faces.find(
+                item =>
+                    item.face === 'videoTop'
+            );
+
+
+        if (
+            topFace &&
+            topFace.emotion
+        ) {
+
+            console.log(
+                'Carrossel iniciado — topo:',
+                topFace.emotion
+            );
+
+
+            playEmotionAudio(
+                topFace.emotion
+            );
+
+        } else {
+
+            // Fallback caso ainda não exista emoção no topo.
+            console.log(
+                'Carrossel iniciado — usando áudio genérico.'
+            );
+
+
+            playEmotionAudio(
+                'carousel'
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // UI
+        // ----------------------------------------------------
 
         hCtrl.enableCarousel();
 
@@ -931,23 +1084,6 @@ function toggleCarousel() {
         );
 
 
-        const faces =
-            hCtrl.getCurrentFaceEmotions();
-
-
-        updateCarouselLabels(
-            faces
-        );
-
-
-        updateInfinityWidget(
-            faces,
-            null,
-            null,
-            0
-        );
-
-
         console.log(
             'Carrossel ativado — segmentação continua ativa.'
         );
@@ -960,12 +1096,7 @@ function toggleCarousel() {
     } else {
 
         // ----------------------------------------------------
-        // NÃO precisamos reativar eCtrl.active.
-        //
-        // Ele nunca foi desligado.
-        //
-        // Isso permite que os loops de MediaPipe e câmera
-        // tenham continuado durante todo o carrossel.
+        // EmotionController nunca foi desligado.
         // ----------------------------------------------------
 
         eCtrl.carouselMode =
@@ -1343,3 +1474,4 @@ document
 
 window.onload =
     init;
+```
