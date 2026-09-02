@@ -90,7 +90,7 @@ export class EmotionController {
 
         this._emotionHistory = [];
 
-        this._emotionHistorySize = 8;
+        this._emotionHistorySize = 4;
 
 
         // =====================================================
@@ -119,7 +119,7 @@ export class EmotionController {
          * uma nova emoção.
          */
 
-        this._emotionRequiredFrames = 4;
+        this._emotionRequiredFrames = 2;
 
 
         /*
@@ -144,7 +144,7 @@ export class EmotionController {
         // TEMPO DE TRANSIÇÃO
         // =====================================================
 
-        this._emotionTransitionDuration = 700;
+        this._emotionTransitionDuration = 300;
 
 
         /*
@@ -1292,64 +1292,7 @@ export class EmotionController {
         }
 
 
-        // =====================================================
-        // REGRA ESPECIAL PARA SAD
-        // =====================================================
-
-        /*
-         * O modelo do face-api frequentemente apresenta
-         * tristeza com confiança relativamente baixa.
-         *
-         * Por isso, se SAD apareceu repetidamente no histórico,
-         * permitimos que ela seja dominante mesmo quando
-         * existe uma diferença pequena para outra emoção.
-         */
-
-        if (
-            counts.sad &&
-            counts.sad >= 2
-        ) {
-
-            const sadItems =
-                this._emotionHistory.filter(
-                    item =>
-                        item.emotion === 'sad'
-                );
-
-
-            const sadAverage =
-                sadItems.length > 0
-                    ? sadItems.reduce(
-                        (
-                            sum,
-                            item
-                        ) =>
-                            sum +
-                            item.confidence,
-                        0
-                    ) /
-                    sadItems.length
-                    : 0;
-
-
-            if (
-                sadAverage >=
-                this._getEmotionMinConfidence(
-                    'sad'
-                )
-            ) {
-
-                if (
-                    counts.sad >=
-                    dominantCount - 1
-                ) {
-
-                    dominantEmotion =
-                        'sad';
-
-                }
-            }
-        }
+     
 
 
         // =====================================================
