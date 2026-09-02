@@ -683,15 +683,22 @@ async function start() {
 
 
                 // ============================================
-                // ÁUDIO DO CARROSSEL
+                // ÁUDIO + INTERVENÇÕES DO CARROSSEL
                 // ============================================
 
                 /*
-                 * ESTA É A REGRA IMPORTANTE:
+                 * ESTA É A REGRA PRINCIPAL:
                  *
-                 * O áudio do carrossel é determinado
-                 * pela expressão que está atualmente
-                 * no holograma superior (videoTop).
+                 * A expressão que está atualmente
+                 * em videoTop controla:
+                 *
+                 * 1. o áudio;
+                 * 2. as intervenções visuais;
+                 * 3. os efeitos emocionais.
+                 *
+                 * A IA continua detectando normalmente,
+                 * mas sua emoção NÃO pode substituir
+                 * a expressão escolhida pelo carrossel.
                  */
                 if (
                     carouselActive
@@ -716,9 +723,35 @@ async function start() {
                         );
 
 
+                        // ------------------------------------
+                        // ÁUDIO
+                        // ------------------------------------
+
                         playEmotionAudio(
                             topFace.emotion
                         );
+
+
+                        // ------------------------------------
+                        // INTERVENÇÕES VISUAIS
+                        // ------------------------------------
+
+                        /*
+                         * Envia a expressão do topo para
+                         * o EmotionController.
+                         *
+                         * Isso NÃO altera a emoção da IA.
+                         * Apenas informa aos efeitos visuais
+                         * qual expressão o carrossel está
+                         * apresentando.
+                         */
+                        if (eCtrl) {
+
+                            eCtrl.setCarouselEmotion(
+                                topFace.emotion,
+                                1
+                            );
+                        }
                     }
                 }
             };
@@ -1422,8 +1455,7 @@ function toggleCarousel() {
          * callback onEmotionChange ignora suas
          * alterações enquanto carouselActive = true.
          */
-        eCtrl.carouselMode =
-            true;
+        eCtrl.setCarouselMode(true);
 
 
         /*
@@ -1441,7 +1473,8 @@ function toggleCarousel() {
          *
          * Como carouselActive já está true,
          * o callback encontra videoTop e toca
-         * o áudio da expressão que está no topo.
+         * o áudio da expressão que está no topo,
+         * além de atualizar as intervenções visuais.
          */
         hCtrl.enableCarousel();
 
@@ -1532,8 +1565,9 @@ function toggleCarousel() {
 
 
         /*
-         * Garante explicitamente o áudio da expressão
-         * que está em videoTop.
+         * Garante explicitamente o áudio e as
+         * intervenções visuais da expressão que
+         * está em videoTop.
          *
          * Se o callback do enableCarousel() já tiver
          * feito isso, playEmotionAudio() simplesmente
@@ -1561,6 +1595,16 @@ function toggleCarousel() {
             playEmotionAudio(
                 topFace.emotion
             );
+
+
+            /*
+             * Atualiza imediatamente as intervenções
+             * visuais para a expressão inicial.
+             */
+            eCtrl.setCarouselEmotion(
+                topFace.emotion,
+                1
+            );
         }
 
 
@@ -1571,8 +1615,12 @@ function toggleCarousel() {
         // DESATIVA CARROSSEL
         // ====================================================
 
-        eCtrl.carouselMode =
-            false;
+        /*
+         * O próprio EmotionController restaura
+         * a última emoção confirmada pela IA
+         * nas intervenções visuais.
+         */
+        eCtrl.setCarouselMode(false);
 
 
         /*
